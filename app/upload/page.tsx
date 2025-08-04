@@ -221,13 +221,13 @@ export default function UploadPage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="image-upload">Choose Image File</Label>
-                  <div className="mt-1 relative">
+                  <div className="mt-1">
                     <Input
                       id="image-upload"
                       type="file"
                       accept="image/*"
                       onChange={handleFileSelect}
-                      className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
+                      className="w-full cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
                     />
                   </div>
                 </div>

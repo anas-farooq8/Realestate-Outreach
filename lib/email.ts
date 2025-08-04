@@ -1,7 +1,9 @@
 import nodemailer from "nodemailer"
 
-const transporter = nodemailer.createTransporter({
-  service: "gmail",
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
   auth: {
     user: process.env.EMAIL_USER || "TBMMoutreach@gmail.com",
     pass: process.env.EMAIL_PASSWORD || "#Protect3d",
@@ -10,7 +12,7 @@ const transporter = nodemailer.createTransporter({
 
 export async function sendCompletionEmail(userEmail: string, totalProperties: number, processedProperties: number) {
   try {
-    const subject = "HOA Data Enrichment Complete"
+    const subject = "Property Data Processing Complete"
     const html = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <h2 style="color: #333;">Property Data Processing Complete</h2>
