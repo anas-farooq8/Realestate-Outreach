@@ -11,15 +11,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Download, RefreshCw, Filter, Search } from "lucide-react"
+import { Download, RefreshCw, Filter, Search, ChevronLeft, ChevronRight } from "lucide-react"
 import { exportToExcel } from "@/lib/excel-export"
 import type { Property } from "@/lib/types"
+
+const ITEMS_PER_PAGE = 20
 
 export default function DashboardPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [filteredProperties, setFilteredProperties] = useState<Property[]>([])
+  const [paginatedProperties, setPaginatedProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
   const [filters, setFilters] = useState({
     state: "all",
     county: "all",
@@ -42,7 +47,11 @@ export default function DashboardPage() {
         throw new Error("User not authenticated")
       }
 
-      const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
+      // Optimized query - only fetch necessary fields initially
+      const { data, error, count } = await supabase
+        .from("properties")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
 
       if (error) {
         throw error
@@ -111,6 +120,16 @@ export default function DashboardPage() {
     }
 
     setFilteredProperties(filtered)
+    setCurrentPage(1) // Reset to first page when filters change
+  }
+
+  const applyPagination = () => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    const endIndex = startIndex + ITEMS_PER_PAGE
+    const paginated = filteredProperties.slice(startIndex, endIndex)
+
+    setPaginatedProperties(paginated)
+    setTotalPages(Math.ceil(filteredProperties.length / ITEMS_PER_PAGE))
   }
 
   const clearFilters = () => {
@@ -122,7 +141,7 @@ export default function DashboardPage() {
       zipCode: "all",
       subscriptionStatus: "all",
     })
-    setFilteredProperties(properties)
+    setCurrentPage(1)
   }
 
   const handleExport = () => {
@@ -144,7 +163,11 @@ export default function DashboardPage() {
     })
   }
 
-  // Get unique values for filter dropdowns
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  // Get unique values for filter dropdowns (optimized)
   const uniqueStates = [...new Set(properties.map((p) => p.state).filter(Boolean))].sort()
   const uniqueCounties = [...new Set(properties.map((p) => p.county).filter(Boolean))].sort()
   const uniqueCities = [...new Set(properties.map((p) => p.city).filter(Boolean))].sort()
@@ -157,6 +180,10 @@ export default function DashboardPage() {
   useEffect(() => {
     applyFilters()
   }, [searchTerm, filters, properties])
+
+  useEffect(() => {
+    applyPagination()
+  }, [filteredProperties, currentPage])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -309,6 +336,7 @@ export default function DashboardPage() {
               <CardDescription>
                 {filteredProperties.length !== properties.length &&
                   `Showing ${filteredProperties.length} of ${properties.length} properties`}
+                {filteredProperties.length > ITEMS_PER_PAGE && ` • Page ${currentPage} of ${totalPages}`}
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -316,66 +344,127 @@ export default function DashboardPage() {
                 <div className="flex justify-center py-8">
                   <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
-              ) : filteredProperties.length === 0 ? (
+              ) : paginatedProperties.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500">No properties found</p>
                 </div>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Property Address</TableHead>
-                        <TableHead>HOA/Management</TableHead>
-                        <TableHead>Decision Maker</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>City</TableHead>
-                        <TableHead>County</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>Zip</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredProperties.map((property) => (
-                        <TableRow key={property.id}>
-                          <TableCell className="font-medium max-w-xs truncate">
-                            {property.property_address || "—"}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {property.hoa_or_management_company || "—"}
-                          </TableCell>
-                          <TableCell>{property.decision_maker_name || "—"}</TableCell>
-                          <TableCell>
-                            {property.decision_maker_email && !property.decision_maker_email.includes("noemail") ? (
-                              <a
-                                href={`mailto:${property.decision_maker_email}`}
-                                className="text-blue-600 hover:underline truncate block max-w-xs"
-                              >
-                                {property.decision_maker_email}
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>{property.decision_maker_phone || "—"}</TableCell>
-                          <TableCell>{property.city || "—"}</TableCell>
-                          <TableCell>{property.county || "—"}</TableCell>
-                          <TableCell>{property.state || "—"}</TableCell>
-                          <TableCell>{property.zip_code || "—"}</TableCell>
-                          <TableCell>
-                            <Badge variant={isSubscribed(property.suspend_until) ? "default" : "secondary"}>
-                              {isSubscribed(property.suspend_until) ? "Subscribed" : "Unsubscribed"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{new Date(property.created_at).toLocaleDateString()}</TableCell>
+                <>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Property Name</TableHead>
+                          <TableHead>HOA/Management</TableHead>
+                          <TableHead>Decision Maker</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>City</TableHead>
+                          <TableHead>County</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Zip</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedProperties.map((property) => (
+                          <TableRow key={property.id}>
+                            <TableCell className="font-medium max-w-xs truncate">
+                              {property.property_address || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {property.hoa_or_management_company || "—"}
+                            </TableCell>
+                            <TableCell>{property.decision_maker_name || "—"}</TableCell>
+                            <TableCell>
+                              {property.decision_maker_email && !property.decision_maker_email.includes("noemail") ? (
+                                <a
+                                  href={`mailto:${property.decision_maker_email}`}
+                                  className="text-blue-600 hover:underline truncate block max-w-xs"
+                                >
+                                  {property.decision_maker_email}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell>{property.decision_maker_phone || "—"}</TableCell>
+                            <TableCell>{property.city || "—"}</TableCell>
+                            <TableCell>{property.county || "—"}</TableCell>
+                            <TableCell>{property.state || "—"}</TableCell>
+                            <TableCell>{property.zip_code || "—"}</TableCell>
+                            <TableCell>
+                              <Badge variant={isSubscribed(property.suspend_until) ? "default" : "secondary"}>
+                                {isSubscribed(property.suspend_until) ? "Subscribed" : "Unsubscribed"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>{new Date(property.created_at).toLocaleDateString()}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="text-sm text-gray-500">
+                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                        {Math.min(currentPage * ITEMS_PER_PAGE, filteredProperties.length)} of{" "}
+                        {filteredProperties.length} results
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(currentPage - 1)}
+                          disabled={currentPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          Previous
+                        </Button>
+
+                        <div className="flex items-center space-x-1">
+                          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                            let pageNum
+                            if (totalPages <= 5) {
+                              pageNum = i + 1
+                            } else if (currentPage <= 3) {
+                              pageNum = i + 1
+                            } else if (currentPage >= totalPages - 2) {
+                              pageNum = totalPages - 4 + i
+                            } else {
+                              pageNum = currentPage - 2 + i
+                            }
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={currentPage === pageNum ? "default" : "outline"}
+                                size="sm"
+                                onClick={() => handlePageChange(pageNum)}
+                                className="w-8 h-8 p-0"
+                              >
+                                {pageNum}
+                              </Button>
+                            )
+                          })}
+                        </div>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handlePageChange(currentPage + 1)}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

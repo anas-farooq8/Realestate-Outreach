@@ -220,14 +220,27 @@ export default function UploadPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="w-full">
-                  <Label htmlFor="image-upload">Choose Image File</Label>
-                  <Input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="mt-1 w-full cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
-                  />
+                  <Label htmlFor="image-upload" className="block text-sm font-medium text-gray-700 mb-2">
+                    Choose Image File
+                  </Label>
+                  <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-gray-400 transition-colors">
+                    <Input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    />
+                    <div className="text-center">
+                      <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="mt-4">
+                        <p className="text-sm text-gray-600">
+                          {selectedFile ? selectedFile.name : "Click to upload or drag and drop"}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 10MB</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 {imagePreview && (

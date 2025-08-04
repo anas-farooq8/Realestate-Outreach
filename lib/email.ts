@@ -21,6 +21,7 @@ export async function sendCompletionEmail(userEmail: string, totalProperties: nu
         <p>Your property processing has been completed.</p>
         <p><strong>Total Properties:</strong> ${totalProperties}</p>
         <p><strong>Successfully Processed:</strong> ${processedProperties}</p>
+        <p><strong>Success Rate:</strong> ${Math.round((processedProperties / totalProperties) * 100)}%</p>
         <p>You can now view your properties in the dashboard.</p>
       `,
     }

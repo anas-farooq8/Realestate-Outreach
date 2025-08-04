@@ -59,9 +59,29 @@ async function processPropertiesAsync(properties: string[], parentAddress: strin
           const uniqueEmail =
             enrichedData.email || `noemail+${Date.now()}+${Math.random().toString(36).substr(2, 9)}@example.com`
 
+          // Check if email already exists
+          const { data: existingProperties, error: checkError } = await supabase
+            .from("properties")
+            .select("property_address, decision_maker_email")
+            .eq("decision_maker_email", uniqueEmail)
+
+          if (checkError) {
+            console.error("Error checking existing email:", checkError)
+          }
+
+          // If email exists, check if property name is the same
+          if (existingProperties && existingProperties.length > 0) {
+            const existingProperty = existingProperties.find((prop: any) => prop.property_address === propertyName)
+
+            if (existingProperty) {
+              console.log(`Skipping duplicate property: ${propertyName} with email: ${uniqueEmail}`)
+              continue // Skip this property as it already exists
+            }
+          }
+
           // Insert into properties table with correct schema
           const { error: insertError } = await supabase.from("properties").insert({
-            property_address: `${propertyName}, ${parentAddress}`,
+            property_address: propertyName, // Store only the property name
             street: enrichedData.street_address,
             city: enrichedData.city,
             county: enrichedData.county,

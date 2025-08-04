@@ -13,15 +13,18 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
     const prompt = `
       Analyze this image and extract all residential community names, subdivision names, or neighborhood names that you can see.
       
-      Return the results as a JSON array of strings, like this:
-      ["Community Name 1", "Community Name 2", "Community Name 3"]
+      IMPORTANT RULES:
+      1. Extract ONLY the property/community name (e.g., "CHASEWOOD", "SUNSET VILLAGE", "PALM GARDENS")
+      2. Do NOT include any additional text like "Estates", "Community", "Subdivision" unless it's part of the actual name
+      3. Remove duplicates - each name should appear only once
+      4. Return names in UPPERCASE format
+      5. Ignore street names, city names, or other non-community identifiers
+      6. Clean up any formatting issues
       
-      Rules:
-      - Only extract actual community/subdivision/neighborhood names
-      - Ignore street names, city names, or other non-community identifiers
-      - Clean up any formatting issues
-      - Remove duplicates
-      - Return only the JSON array, no other text
+      Return the results as a JSON array of strings, like this:
+      ["CHASEWOOD", "SUNSET VILLAGE", "PALM GARDENS"]
+      
+      Return only the JSON array, no other text.
     `
 
     const imagePart = {
@@ -55,7 +58,9 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
       const names = JSON.parse(cleanedText)
 
       if (Array.isArray(names)) {
-        return names.filter((name) => typeof name === "string" && name.trim().length > 0).map((name) => name.trim())
+        // Remove duplicates and clean names
+        const uniqueNames = [...new Set(names.filter((name) => typeof name === "string" && name.trim().length > 0))]
+        return uniqueNames.map((name) => name.trim().toUpperCase())
       } else {
         throw new Error("Response is not an array")
       }
@@ -73,7 +78,9 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
         .filter((line) => line.length > 0 && !line.includes("JSON") && !line.includes("array"))
 
       if (lines.length > 0) {
-        return lines
+        // Remove duplicates and clean names
+        const uniqueNames = [...new Set(lines)]
+        return uniqueNames.map((name) => name.trim().toUpperCase())
       }
 
       throw new Error("Could not extract property names from the response")
@@ -100,23 +107,25 @@ export async function enrichPropertyData(propertyName: string, parentAddress: st
 
       Return the information as a JSON object with this exact structure:
       {
-        "management_company": "Company Name or null",
-        "decision_maker_name": "Full Name or null",
-        "email": "email@example.com or null",
-        "phone": "phone number or null",
-        "street_address": "street address or null",
-        "city": "city name or null",
-        "county": "county name or null",
-        "state": "state name or null",
-        "zip_code": "zip code or null"
+        "management_company": "Company Name",
+        "decision_maker_name": "Full Name",
+        "email": "email@example.com",
+        "phone": "phone number",
+        "street_address": "street address",
+        "city": "city name",
+        "county": "county name only (no 'County' word)",
+        "state": "full state name (e.g., Florida, not FL)",
+        "zip_code": "zip code"
       }
 
-      Important:
-      - Use null for any field you cannot find reliable information for
-      - Ensure email addresses are valid format
-      - Include area codes for phone numbers
-      - Be as accurate as possible with the information
-      - Return only the JSON object, no other text
+      IMPORTANT RULES:
+      1. For state: Use full state name (e.g., "Florida", "California", "Texas")
+      2. For county: Use only the county name without the word "County" (e.g., "Palm Beach", not "Palm Beach County")
+      3. If any field cannot be found, simply omit that field from the JSON response
+      4. Ensure email addresses are valid format
+      5. Include area codes for phone numbers
+      6. Be as accurate as possible with the information
+      7. Return only the JSON object, no other text
     `
 
     const result = await model.generateContent(prompt)
@@ -130,49 +139,31 @@ export async function enrichPropertyData(propertyName: string, parentAddress: st
 
       const data = JSON.parse(cleanedText)
 
-      // Ensure all required fields exist
-      return {
-        management_company: data.management_company || null,
-        decision_maker_name: data.decision_maker_name || null,
-        email: data.email || null,
-        phone: data.phone || null,
-        street_address: data.street_address || null,
-        city: data.city || null,
-        county: data.county || null,
-        state: data.state || null,
-        zip_code: data.zip_code || null,
-      }
+      // Only return fields that have actual values
+      const result: any = {}
+
+      if (data.management_company) result.management_company = data.management_company
+      if (data.decision_maker_name) result.decision_maker_name = data.decision_maker_name
+      if (data.email) result.email = data.email
+      if (data.phone) result.phone = data.phone
+      if (data.street_address) result.street_address = data.street_address
+      if (data.city) result.city = data.city
+      if (data.county) result.county = data.county
+      if (data.state) result.state = data.state
+      if (data.zip_code) result.zip_code = data.zip_code
+
+      return result
     } catch (parseError) {
       console.error("Failed to parse enrichment response:", parseError)
       console.log("Raw response:", text)
 
-      // Return empty structure if parsing fails
-      return {
-        management_company: null,
-        decision_maker_name: null,
-        email: null,
-        phone: null,
-        street_address: null,
-        city: null,
-        county: null,
-        state: null,
-        zip_code: null,
-      }
+      // Return empty object if parsing fails
+      return {}
     }
   } catch (error) {
     console.error("Error enriching property data:", error)
 
-    // Return empty structure instead of throwing error to prevent processing failure
-    return {
-      management_company: null,
-      decision_maker_name: null,
-      email: null,
-      phone: null,
-      street_address: null,
-      city: null,
-      county: null,
-      state: null,
-      zip_code: null,
-    }
+    // Return empty object instead of throwing error to prevent processing failure
+    return {}
   }
 }
