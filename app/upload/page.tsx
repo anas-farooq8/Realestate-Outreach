@@ -1,42 +1,58 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/navbar"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useToast } from "@/hooks/use-toast"
-import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react"
-import type { ExtractedCommunity } from "@/lib/types"
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Navbar } from "@/components/navbar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
+import { dataCache } from "@/lib/cache";
+import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react";
+import type { ExtractedCommunity } from "@/lib/types";
 
 export default function UploadPage() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
-  const [extractedProperties, setExtractedProperties] = useState<ExtractedCommunity[]>([])
-  const [parentAddress, setParentAddress] = useState("")
-  const [isExtracting, setIsExtracting] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingValue, setEditingValue] = useState("")
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [extractedProperties, setExtractedProperties] = useState<
+    ExtractedCommunity[]
+  >([]);
+  const [parentAddress, setParentAddress] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
 
-  const { toast } = useToast()
-  const router = useRouter()
+  const { toast } = useToast();
+  const router = useRouter();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const file = event.target.files?.[0];
     if (file) {
       if (!file.type.startsWith("image/")) {
         toast({
           title: "Invalid File",
           description: "Please select an image file (JPEG or PNG)",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
 
       if (file.size > 10 * 1024 * 1024) {
@@ -44,24 +60,24 @@ export default function UploadPage() {
           title: "File Too Large",
           description: "Please select an image smaller than 10MB",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
 
-      setSelectedFile(file)
+      setSelectedFile(file);
 
       // Create preview
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = (e) => {
-        setImagePreview(e.target?.result as string)
-      }
-      reader.readAsDataURL(file)
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
 
       // Reset previous extraction
-      setExtractedProperties([])
-      setParentAddress("")
+      setExtractedProperties([]);
+      setParentAddress("");
     }
-  }
+  };
 
   const handleExtractNames = async () => {
     if (!selectedFile) {
@@ -69,24 +85,24 @@ export default function UploadPage() {
         title: "No Image",
         description: "Please select an image first",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsExtracting(true)
+    setIsExtracting(true);
     try {
-      const formData = new FormData()
-      formData.append("image", selectedFile)
+      const formData = new FormData();
+      formData.append("image", selectedFile);
 
       const response = await fetch("/api/extract-names", {
         method: "POST",
         body: formData,
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to extract names")
+        throw new Error(data.error || "Failed to extract names");
       }
 
       if (data.names && data.names.length > 0) {
@@ -94,64 +110,84 @@ export default function UploadPage() {
           id: `property-${index}`,
           name: name.trim(),
           editable: false,
-        }))
-        setExtractedProperties(properties)
+        }));
+        setExtractedProperties(properties);
         toast({
           title: "Success",
           description: `Extracted ${properties.length} property names`,
-        })
+        });
       } else {
         toast({
           title: "No Names Found",
           description: "No property names could be extracted from this image",
           variant: "destructive",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error extracting names:", error)
+      console.error("Error extracting names:", error);
       toast({
         title: "Extraction Failed",
-        description: error instanceof Error ? error.message : "Failed to extract property names",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to extract property names",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsExtracting(false)
+      setIsExtracting(false);
     }
-  }
+  };
 
   const handleEditProperty = (id: string, currentName: string) => {
-    setEditingId(id)
-    setEditingValue(currentName)
-  }
+    setEditingId(id);
+    setEditingValue(currentName);
+  };
 
   const handleSaveEdit = (id: string) => {
     if (editingValue.trim()) {
       setExtractedProperties((prev) =>
-        prev.map((property) => (property.id === id ? { ...property, name: editingValue.trim() } : property)),
-      )
+        prev.map((property) =>
+          property.id === id
+            ? { ...property, name: editingValue.trim() }
+            : property
+        )
+      );
     }
-    setEditingId(null)
-    setEditingValue("")
-  }
+    setEditingId(null);
+    setEditingValue("");
+  };
 
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setEditingValue("")
-  }
+  const handleCancelEdit = (propertyId?: string) => {
+    // If we're canceling edit on a newly added property, remove it
+    if (propertyId) {
+      const property = extractedProperties.find((p) => p.id === propertyId);
+      if (property && property.name === "New Property") {
+        handleRemoveProperty(propertyId);
+        setEditingId(null);
+        setEditingValue("");
+        return;
+      }
+    }
+
+    setEditingId(null);
+    setEditingValue("");
+  };
 
   const handleRemoveProperty = (id: string) => {
-    setExtractedProperties((prev) => prev.filter((property) => property.id !== id))
-  }
+    setExtractedProperties((prev) =>
+      prev.filter((property) => property.id !== id)
+    );
+  };
 
   const handleAddProperty = () => {
     const newProperty: ExtractedCommunity = {
       id: `property-${Date.now()}`,
       name: "New Property",
       editable: false,
-    }
-    setExtractedProperties((prev) => [...prev, newProperty])
-    handleEditProperty(newProperty.id, newProperty.name)
-  }
+    };
+    setExtractedProperties((prev) => [...prev, newProperty]);
+    handleEditProperty(newProperty.id, newProperty.name);
+  };
 
   const handleProcessProperties = async () => {
     if (extractedProperties.length === 0) {
@@ -159,8 +195,8 @@ export default function UploadPage() {
         title: "No Properties",
         description: "Please extract property names first",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     if (!parentAddress.trim()) {
@@ -168,13 +204,13 @@ export default function UploadPage() {
         title: "Missing Address",
         description: "Please enter a parent address",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
-    setIsProcessing(true)
+    setIsProcessing(true);
     try {
-      const propertyNames = extractedProperties.map((p) => p.name)
+      const propertyNames = extractedProperties.map((p) => p.name);
 
       const response = await fetch("/api/process-properties", {
         method: "POST",
@@ -186,32 +222,37 @@ export default function UploadPage() {
           parentAddress: parentAddress.trim(),
           filename: selectedFile?.name || "uploaded-image",
         }),
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to start processing")
+        throw new Error(data.error || "Failed to start processing");
       }
 
       toast({
         title: "Processing Started",
-        description: "Your properties are being processed. You'll receive an email when complete.",
-      })
+        description:
+          "Your properties are being processed. You'll receive an email when complete.",
+      });
+
+      // Invalidate properties cache since new data will be added
+      dataCache.invalidateProperties();
 
       // Redirect to dashboard
-      router.push("/dashboard")
+      router.push("/dashboard");
     } catch (error) {
-      console.error("Error processing properties:", error)
+      console.error("Error processing properties:", error);
       toast({
         title: "Processing Failed",
-        description: error instanceof Error ? error.message : "Failed to start processing",
+        description:
+          error instanceof Error ? error.message : "Failed to start processing",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsProcessing(false)
+      setIsProcessing(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -219,9 +260,12 @@ export default function UploadPage() {
       <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="space-y-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Upload Property Image</h1>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Upload Property Image
+            </h1>
             <p className="mt-2 text-gray-600">
-              Upload an image containing property names to extract and enrich contact information
+              Upload an image containing property names to extract and enrich
+              contact information
             </p>
           </div>
 
@@ -233,26 +277,38 @@ export default function UploadPage() {
                 <span>Step 1: Upload Image</span>
               </CardTitle>
               <CardDescription>
-                Select an image file (JPEG or PNG) containing property or community names
+                Select an image file (JPEG or PNG) containing property or
+                community names
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center space-x-4">
                   <div className="flex-1">
-                    <Label htmlFor="image-upload" className="block text-sm font-medium text-gray-700 mb-2">
+                    <Label
+                      htmlFor="image-upload"
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                    >
                       Choose Image File
                     </Label>
-                    <Input
-                      id="image-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileSelect}
-                      className="cursor-pointer"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 10MB</p>
+                    <div className="relative">
+                      <Input
+                        id="image-upload"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="w-full cursor-pointer"
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      PNG, JPG up to 10MB
+                    </p>
                   </div>
-                  <Button onClick={handleExtractNames} disabled={!selectedFile || isExtracting} variant="outline">
+                  <Button
+                    onClick={handleExtractNames}
+                    disabled={!selectedFile || isExtracting}
+                    variant="outline"
+                  >
                     {isExtracting ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
@@ -291,10 +347,15 @@ export default function UploadPage() {
                   <div>
                     <CardTitle>Step 2: Review & Edit Property Names</CardTitle>
                     <CardDescription>
-                      Review the extracted property names. You can edit or remove any entries before processing.
+                      Review the extracted property names. You can edit or
+                      remove any entries before processing.
                     </CardDescription>
                   </div>
-                  <Button onClick={handleAddProperty} size="sm" variant="outline">
+                  <Button
+                    onClick={handleAddProperty}
+                    size="sm"
+                    variant="outline"
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Add Property
                   </Button>
@@ -317,26 +378,44 @@ export default function UploadPage() {
                               {editingId === property.id ? (
                                 <Input
                                   value={editingValue}
-                                  onChange={(e) => setEditingValue(e.target.value)}
+                                  onChange={(e) =>
+                                    setEditingValue(e.target.value)
+                                  }
                                   onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveEdit(property.id)
-                                    if (e.key === "Escape") handleCancelEdit()
+                                    if (e.key === "Enter")
+                                      handleSaveEdit(property.id);
+                                    if (e.key === "Escape")
+                                      handleCancelEdit(property.id);
                                   }}
                                   className="w-full"
                                   autoFocus
                                 />
                               ) : (
-                                <span className="font-medium">{property.name}</span>
+                                <span className="font-medium">
+                                  {property.name}
+                                </span>
                               )}
                             </TableCell>
                             <TableCell>
                               <div className="flex space-x-2">
                                 {editingId === property.id ? (
                                   <>
-                                    <Button size="sm" variant="outline" onClick={() => handleSaveEdit(property.id)}>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleSaveEdit(property.id)
+                                      }
+                                    >
                                       <Check className="h-4 w-4" />
                                     </Button>
-                                    <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() =>
+                                        handleCancelEdit(property.id)
+                                      }
+                                    >
                                       <X className="h-4 w-4" />
                                     </Button>
                                   </>
@@ -345,14 +424,21 @@ export default function UploadPage() {
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleEditProperty(property.id, property.name)}
+                                      onClick={() =>
+                                        handleEditProperty(
+                                          property.id,
+                                          property.name
+                                        )
+                                      }
                                     >
                                       <Edit2 className="h-4 w-4" />
                                     </Button>
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      onClick={() => handleRemoveProperty(property.id)}
+                                      onClick={() =>
+                                        handleRemoveProperty(property.id)
+                                      }
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -375,13 +461,18 @@ export default function UploadPage() {
                       onChange={(e) => setParentAddress(e.target.value)}
                     />
                     <p className="text-sm text-gray-500">
-                      Enter the general location (city, county, state) where these properties are located
+                      Enter the general location (city, county, state) where
+                      these properties are located
                     </p>
                   </div>
 
                   <Button
                     onClick={handleProcessProperties}
-                    disabled={isProcessing || extractedProperties.length === 0 || !parentAddress.trim()}
+                    disabled={
+                      isProcessing ||
+                      extractedProperties.length === 0 ||
+                      !parentAddress.trim()
+                    }
                     className="w-full"
                     size="lg"
                   >
@@ -401,5 +492,5 @@ export default function UploadPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

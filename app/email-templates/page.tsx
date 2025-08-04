@@ -1,17 +1,36 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react"
-import { createClient } from "@/lib/supabase/client"
-import { Navbar } from "@/components/navbar"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState, useCallback, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { Navbar } from "@/components/navbar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +38,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,7 +48,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 import {
   Pagination,
   PaginationContent,
@@ -38,30 +57,43 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination"
-import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react"
-import type { EmailTemplate } from "@/lib/types"
+} from "@/components/ui/pagination";
+import { useToast } from "@/hooks/use-toast";
+import { useCachedEmailTemplates } from "@/hooks/use-cached-data";
+import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react";
+import type { EmailTemplate } from "@/lib/types";
 
-type FilterType = "all" | "active" | "inactive"
-type SortField = "created_at" | "updated_at"
-type SortOrder = "asc" | "desc"
+type FilterType = "all" | "active" | "inactive";
+type SortField = "created_at" | "updated_at";
+type SortOrder = "asc" | "desc";
 
 export default function EmailTemplatesPage() {
-  const [templates, setTemplates] = useState<EmailTemplate[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null)
-  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
-  const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const [filter, setFilter] = useState<FilterType>("all")
-  const [searchTerm, setSearchTerm] = useState("")
-  const [sortField, setSortField] = useState<SortField>("created_at")
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
+  // Use cached data instead of local state and manual fetching
+  const {
+    data: templates,
+    loading,
+    error,
+    refresh: refreshTemplates,
+    invalidateCache,
+  } = useCachedEmailTemplates();
+
+  const [saving, setSaving] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] =
+    useState<EmailTemplate | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(
+    null
+  );
+  const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(
+    null
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filter, setFilter] = useState<FilterType>("all");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [formData, setFormData] = useState({
     template_name: "",
     subject: "",
@@ -69,82 +101,61 @@ export default function EmailTemplatesPage() {
     body: "",
     signature: "",
     is_active: true,
-  })
+  });
 
-  const { toast } = useToast()
-  const supabase = createClient()
+  const { toast } = useToast();
+  const supabase = createClient();
 
-  const ITEMS_PER_PAGE = 20
+  const ITEMS_PER_PAGE = 20;
 
   // Memoized filtered, sorted, and paginated data
   const filteredAndSortedTemplates = useMemo(() => {
-    let filtered = templates
+    let filtered = templates;
 
     // Apply status filter
     if (filter === "active") {
-      filtered = filtered.filter((template) => template.is_active)
+      filtered = filtered.filter((template) => template.is_active);
     } else if (filter === "inactive") {
-      filtered = filtered.filter((template) => !template.is_active)
+      filtered = filtered.filter((template) => !template.is_active);
     }
 
     // Apply search filter
     if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase()
+      const search = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (template) =>
           template.template_name.toLowerCase().includes(search) ||
           template.subject?.toLowerCase().includes(search) ||
-          template.hook?.toLowerCase().includes(search),
-      )
+          template.hook?.toLowerCase().includes(search)
+      );
     }
 
     // Apply sorting
     const sorted = [...filtered].sort((a, b) => {
-      const aValue = new Date(a[sortField]).getTime()
-      const bValue = new Date(b[sortField]).getTime()
+      const aValue = new Date(a[sortField]).getTime();
+      const bValue = new Date(b[sortField]).getTime();
 
       if (sortOrder === "asc") {
-        return aValue - bValue
+        return aValue - bValue;
       } else {
-        return bValue - aValue
+        return bValue - aValue;
       }
-    })
+    });
 
-    return sorted
-  }, [templates, filter, searchTerm, sortField, sortOrder])
+    return sorted;
+  }, [templates, filter, searchTerm, sortField, sortOrder]);
 
   const paginatedTemplates = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredAndSortedTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-  }, [filteredAndSortedTemplates, currentPage])
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredAndSortedTemplates.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
+  }, [filteredAndSortedTemplates, currentPage]);
 
-  const totalPages = Math.ceil(filteredAndSortedTemplates.length / ITEMS_PER_PAGE)
-
-  const fetchTemplates = useCallback(async () => {
-    try {
-      setLoading(true)
-      const { data, error } = await supabase
-        .from("email_templates")
-        .select("*")
-        .order("created_at", { ascending: false })
-
-      if (error) {
-        console.error("Supabase error:", error)
-        throw new Error(error.message)
-      }
-
-      setTemplates(data || [])
-    } catch (error) {
-      console.error("Error fetching templates:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to load email templates",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }, [supabase, toast])
+  const totalPages = Math.ceil(
+    filteredAndSortedTemplates.length / ITEMS_PER_PAGE
+  );
 
   const resetForm = () => {
     setFormData({
@@ -154,13 +165,13 @@ export default function EmailTemplatesPage() {
       body: "",
       signature: "",
       is_active: true,
-    })
-    setEditingTemplate(null)
-  }
+    });
+    setEditingTemplate(null);
+  };
 
   const handleOpenDialog = (template?: EmailTemplate) => {
     if (template) {
-      setEditingTemplate(template)
+      setEditingTemplate(template);
       setFormData({
         template_name: template.template_name,
         subject: template.subject || "",
@@ -168,17 +179,17 @@ export default function EmailTemplatesPage() {
         body: template.body,
         signature: template.signature || "",
         is_active: template.is_active,
-      })
+      });
     } else {
-      resetForm()
+      resetForm();
     }
-    setIsDialogOpen(true)
-  }
+    setIsDialogOpen(true);
+  };
 
   const handleCloseDialog = () => {
-    setIsDialogOpen(false)
-    resetForm()
-  }
+    setIsDialogOpen(false);
+    resetForm();
+  };
 
   const handleSaveTemplate = async () => {
     try {
@@ -187,11 +198,11 @@ export default function EmailTemplatesPage() {
           title: "Validation Error",
           description: "Template name and body are required",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
 
-      setSaving(true)
+      setSaving(true);
 
       const templateData = {
         template_name: formData.template_name.trim(),
@@ -201,12 +212,16 @@ export default function EmailTemplatesPage() {
         signature: formData.signature.trim() || null,
         is_active: formData.is_active,
         updated_at: new Date().toISOString(),
-      }
+      };
 
-      let result
+      let result;
       if (editingTemplate) {
         // Update existing template
-        result = await supabase.from("email_templates").update(templateData).eq("id", editingTemplate.id).select()
+        result = await supabase
+          .from("email_templates")
+          .update(templateData)
+          .eq("id", editingTemplate.id)
+          .select();
       } else {
         // Create new template - let database auto-generate the ID
         result = await supabase
@@ -217,86 +232,96 @@ export default function EmailTemplatesPage() {
               created_at: new Date().toISOString(),
             },
           ])
-          .select()
+          .select();
       }
 
       if (result.error) {
-        console.error("Supabase error:", result.error)
-        throw new Error(result.error.message)
+        console.error("Supabase error:", result.error);
+        throw new Error(result.error.message);
       }
 
       toast({
         title: editingTemplate ? "Template Updated" : "Template Created",
-        description: `Email template has been ${editingTemplate ? "updated" : "created"} successfully`,
-      })
+        description: `Email template has been ${
+          editingTemplate ? "updated" : "created"
+        } successfully`,
+      });
 
-      handleCloseDialog()
+      handleCloseDialog();
 
-      // Optimistically update the local state instead of refetching all data
-      if (editingTemplate && result.data?.[0]) {
-        setTemplates((prev) => prev.map((t) => (t.id === editingTemplate.id ? result.data[0] : t)))
-      } else if (result.data?.[0]) {
-        setTemplates((prev) => [result.data[0], ...prev])
-      }
+      // Invalidate cache to refresh data
+      invalidateCache();
+      // Refresh templates to get updated data
+      refreshTemplates();
     } catch (error) {
-      console.error("Error saving template:", error)
+      console.error("Error saving template:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save email template",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to save email template",
         variant: "destructive",
-      })
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleDeleteClick = (template: EmailTemplate) => {
-    setTemplateToDelete(template)
-    setIsDeleteDialogOpen(true)
-  }
+    setTemplateToDelete(template);
+    setIsDeleteDialogOpen(true);
+  };
 
   const handleDeleteConfirm = async () => {
-    if (!templateToDelete) return
+    if (!templateToDelete) return;
 
     try {
-      const { error } = await supabase.from("email_templates").delete().eq("id", templateToDelete.id)
+      const { error } = await supabase
+        .from("email_templates")
+        .delete()
+        .eq("id", templateToDelete.id);
 
       if (error) {
-        console.error("Supabase error:", error)
-        throw new Error(error.message)
+        console.error("Supabase error:", error);
+        throw new Error(error.message);
       }
 
       toast({
         title: "Template Deleted",
         description: "Email template has been deleted successfully",
-      })
+      });
 
-      // Optimistically update local state
-      setTemplates((prev) => prev.filter((t) => t.id !== templateToDelete.id))
+      // Invalidate cache and refresh data
+      invalidateCache();
+      refreshTemplates();
 
       // Adjust current page if necessary
-      const newFilteredCount = filteredAndSortedTemplates.length - 1
-      const newTotalPages = Math.ceil(newFilteredCount / ITEMS_PER_PAGE)
+      const newFilteredCount = filteredAndSortedTemplates.length - 1;
+      const newTotalPages = Math.ceil(newFilteredCount / ITEMS_PER_PAGE);
       if (currentPage > newTotalPages && newTotalPages > 0) {
-        setCurrentPage(newTotalPages)
+        setCurrentPage(newTotalPages);
       }
     } catch (error) {
-      console.error("Error deleting template:", error)
+      console.error("Error deleting template:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete email template",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete email template",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsDeleteDialogOpen(false)
-      setTemplateToDelete(null)
+      setIsDeleteDialogOpen(false);
+      setTemplateToDelete(null);
     }
-  }
+  };
 
   const handleDeleteCancel = () => {
-    setIsDeleteDialogOpen(false)
-    setTemplateToDelete(null)
-  }
+    setIsDeleteDialogOpen(false);
+    setTemplateToDelete(null);
+  };
 
   const handleToggleActive = async (id: number, isActive: boolean) => {
     try {
@@ -307,103 +332,119 @@ export default function EmailTemplatesPage() {
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
-        .select()
+        .select();
 
       if (error) {
-        console.error("Supabase error:", error)
-        throw new Error(error.message)
+        console.error("Supabase error:", error);
+        throw new Error(error.message);
       }
 
       toast({
         title: isActive ? "Template Activated" : "Template Deactivated",
-        description: `Email template has been ${isActive ? "activated" : "deactivated"}`,
-      })
+        description: `Email template has been ${
+          isActive ? "activated" : "deactivated"
+        }`,
+      });
 
-      // Optimistically update local state
-      if (data?.[0]) {
-        setTemplates((prev) => prev.map((t) => (t.id === id ? data[0] : t)))
-      }
+      // Invalidate cache and refresh data
+      invalidateCache();
+      refreshTemplates();
     } catch (error) {
-      console.error("Error toggling template status:", error)
+      console.error("Error toggling template status:", error);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update template status",
+        description:
+          error instanceof Error
+            ? error.message
+            : "Failed to update template status",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   const handlePreview = (template: EmailTemplate) => {
-    setPreviewTemplate(template)
-    setIsPreviewOpen(true)
-  }
+    setPreviewTemplate(template);
+    setIsPreviewOpen(true);
+  };
 
   const handleFilterChange = (newFilter: FilterType) => {
-    setFilter(newFilter)
-    setCurrentPage(1) // Reset to first page when filter changes
-  }
+    setFilter(newFilter);
+    setCurrentPage(1); // Reset to first page when filter changes
+  };
 
   const handleSearchChange = (value: string) => {
-    setSearchTerm(value)
-    setCurrentPage(1) // Reset to first page when search changes
-  }
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to first page when search changes
+  };
 
   const handleSortChange = (field: SortField) => {
     if (sortField === field) {
       // Toggle order if same field
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
       // Set new field with default desc order
-      setSortField(field)
-      setSortOrder("desc")
+      setSortField(field);
+      setSortOrder("desc");
     }
-    setCurrentPage(1) // Reset to first page when sort changes
-  }
+    setCurrentPage(1); // Reset to first page when sort changes
+  };
 
   const renderPaginationItems = () => {
-    const items = []
-    const maxVisiblePages = 5
+    const items = [];
+    const maxVisiblePages = 5;
 
     if (totalPages <= maxVisiblePages) {
       for (let i = 1; i <= totalPages; i++) {
         items.push(
           <PaginationItem key={i}>
-            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+            <PaginationLink
+              onClick={() => setCurrentPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
               {i}
             </PaginationLink>
-          </PaginationItem>,
-        )
+          </PaginationItem>
+        );
       }
     } else {
       // Always show first page
       items.push(
         <PaginationItem key={1}>
-          <PaginationLink onClick={() => setCurrentPage(1)} isActive={currentPage === 1} className="cursor-pointer">
+          <PaginationLink
+            onClick={() => setCurrentPage(1)}
+            isActive={currentPage === 1}
+            className="cursor-pointer"
+          >
             1
           </PaginationLink>
-        </PaginationItem>,
-      )
+        </PaginationItem>
+      );
 
       if (currentPage > 3) {
-        items.push(<PaginationEllipsis key="ellipsis1" />)
+        items.push(<PaginationEllipsis key="ellipsis1" />);
       }
 
       // Show pages around current page
-      const start = Math.max(2, currentPage - 1)
-      const end = Math.min(totalPages - 1, currentPage + 1)
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
 
       for (let i = start; i <= end; i++) {
         items.push(
           <PaginationItem key={i}>
-            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+            <PaginationLink
+              onClick={() => setCurrentPage(i)}
+              isActive={currentPage === i}
+              className="cursor-pointer"
+            >
               {i}
             </PaginationLink>
-          </PaginationItem>,
-        )
+          </PaginationItem>
+        );
       }
 
       if (currentPage < totalPages - 2) {
-        items.push(<PaginationEllipsis key="ellipsis2" />)
+        items.push(<PaginationEllipsis key="ellipsis2" />);
       }
 
       // Always show last page
@@ -417,17 +458,13 @@ export default function EmailTemplatesPage() {
             >
               {totalPages}
             </PaginationLink>
-          </PaginationItem>,
-        )
+          </PaginationItem>
+        );
       }
     }
 
-    return items
-  }
-
-  useEffect(() => {
-    fetchTemplates()
-  }, [fetchTemplates])
+    return items;
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -436,12 +473,22 @@ export default function EmailTemplatesPage() {
         <div className="space-y-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Email Templates</h1>
-              <p className="mt-2 text-gray-600">Create and manage email templates for your outreach campaigns</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Email Templates
+              </h1>
+              <p className="mt-2 text-gray-600">
+                Create and manage email templates for your outreach campaigns
+              </p>
             </div>
             <div className="flex space-x-4">
-              <Button onClick={fetchTemplates} variant="outline" disabled={loading}>
-                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <Button
+                onClick={refreshTemplates}
+                variant="outline"
+                disabled={loading}
+              >
+                <RefreshCw
+                  className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                />
                 Refresh
               </Button>
               <Button onClick={() => handleOpenDialog()}>
@@ -483,7 +530,8 @@ export default function EmailTemplatesPage() {
                     </div>
                   </div>
                   <div className="text-sm text-gray-500">
-                    Showing {paginatedTemplates.length} of {filteredAndSortedTemplates.length} templates
+                    Showing {paginatedTemplates.length} of{" "}
+                    {filteredAndSortedTemplates.length} templates
                   </div>
                 </div>
 
@@ -492,22 +540,34 @@ export default function EmailTemplatesPage() {
                   <Label className="text-sm font-medium">Sort by:</Label>
                   <div className="flex space-x-2">
                     <Button
-                      variant={sortField === "created_at" ? "default" : "outline"}
+                      variant={
+                        sortField === "created_at" ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => handleSortChange("created_at")}
                       className="flex items-center space-x-1"
                     >
                       <span>Created</span>
-                      {sortField === "created_at" && <span className="text-xs">{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      {sortField === "created_at" && (
+                        <span className="text-xs">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
                     </Button>
                     <Button
-                      variant={sortField === "updated_at" ? "default" : "outline"}
+                      variant={
+                        sortField === "updated_at" ? "default" : "outline"
+                      }
                       size="sm"
                       onClick={() => handleSortChange("updated_at")}
                       className="flex items-center space-x-1"
                     >
                       <span>Updated</span>
-                      {sortField === "updated_at" && <span className="text-xs">{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                      {sortField === "updated_at" && (
+                        <span className="text-xs">
+                          {sortOrder === "asc" ? "↑" : "↓"}
+                        </span>
+                      )}
                     </Button>
                   </div>
                 </div>
@@ -518,8 +578,12 @@ export default function EmailTemplatesPage() {
           {/* Templates Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Email Templates ({filteredAndSortedTemplates.length})</CardTitle>
-              <CardDescription>Manage your email templates for outreach campaigns</CardDescription>
+              <CardTitle>
+                Email Templates ({filteredAndSortedTemplates.length})
+              </CardTitle>
+              <CardDescription>
+                Manage your email templates for outreach campaigns
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -558,31 +622,63 @@ export default function EmailTemplatesPage() {
                       <TableBody>
                         {paginatedTemplates.map((template) => (
                           <TableRow key={template.id}>
-                            <TableCell className="font-medium max-w-xs truncate">{template.template_name}</TableCell>
-                            <TableCell className="max-w-xs truncate">{template.subject || "—"}</TableCell>
-                            <TableCell className="max-w-xs truncate">{template.hook || "—"}</TableCell>
+                            <TableCell className="font-medium max-w-xs truncate">
+                              {template.template_name}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {template.subject || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {template.hook || "—"}
+                            </TableCell>
                             <TableCell>
                               <div className="flex items-center space-x-2">
                                 <Switch
                                   checked={template.is_active}
-                                  onCheckedChange={(checked) => handleToggleActive(template.id, checked)}
+                                  onCheckedChange={(checked) =>
+                                    handleToggleActive(template.id, checked)
+                                  }
                                 />
-                                <Badge variant={template.is_active ? "default" : "secondary"}>
+                                <Badge
+                                  variant={
+                                    template.is_active ? "default" : "secondary"
+                                  }
+                                >
                                   {template.is_active ? "Active" : "Inactive"}
                                 </Badge>
                               </div>
                             </TableCell>
-                            <TableCell>{new Date(template.created_at).toLocaleDateString()}</TableCell>
-                            <TableCell>{new Date(template.updated_at).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              {new Date(
+                                template.created_at
+                              ).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(
+                                template.updated_at
+                              ).toLocaleDateString()}
+                            </TableCell>
                             <TableCell>
                               <div className="flex space-x-2">
-                                <Button onClick={() => handlePreview(template)} size="sm" variant="outline">
+                                <Button
+                                  onClick={() => handlePreview(template)}
+                                  size="sm"
+                                  variant="outline"
+                                >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                <Button onClick={() => handleOpenDialog(template)} size="sm" variant="outline">
+                                <Button
+                                  onClick={() => handleOpenDialog(template)}
+                                  size="sm"
+                                  variant="outline"
+                                >
                                   <Edit2 className="h-4 w-4" />
                                 </Button>
-                                <Button onClick={() => handleDeleteClick(template)} size="sm" variant="outline">
+                                <Button
+                                  onClick={() => handleDeleteClick(template)}
+                                  size="sm"
+                                  variant="outline"
+                                >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -600,16 +696,28 @@ export default function EmailTemplatesPage() {
                         <PaginationContent>
                           <PaginationItem>
                             <PaginationPrevious
-                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                              className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                              onClick={() =>
+                                setCurrentPage(Math.max(1, currentPage - 1))
+                              }
+                              className={
+                                currentPage === 1
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
+                              }
                             />
                           </PaginationItem>
                           {renderPaginationItems()}
                           <PaginationItem>
                             <PaginationNext
-                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              onClick={() =>
+                                setCurrentPage(
+                                  Math.min(totalPages, currentPage + 1)
+                                )
+                              }
                               className={
-                                currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"
+                                currentPage === totalPages
+                                  ? "pointer-events-none opacity-50"
+                                  : "cursor-pointer"
                               }
                             />
                           </PaginationItem>
@@ -628,9 +736,15 @@ export default function EmailTemplatesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingTemplate ? "Edit Email Template" : "Create New Email Template"}</DialogTitle>
+            <DialogTitle>
+              {editingTemplate
+                ? "Edit Email Template"
+                : "Create New Email Template"}
+            </DialogTitle>
             <DialogDescription>
-              {editingTemplate ? "Update your email template" : "Create a new email template for your campaigns"}
+              {editingTemplate
+                ? "Update your email template"
+                : "Create a new email template for your campaigns"}
             </DialogDescription>
           </DialogHeader>
 
@@ -640,7 +754,9 @@ export default function EmailTemplatesPage() {
               <Input
                 id="template_name"
                 value={formData.template_name}
-                onChange={(e) => setFormData({ ...formData, template_name: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, template_name: e.target.value })
+                }
                 placeholder="e.g., Email #1"
                 className="mt-1"
               />
@@ -651,7 +767,9 @@ export default function EmailTemplatesPage() {
               <Input
                 id="subject"
                 value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, subject: e.target.value })
+                }
                 placeholder="e.g., The Silent Reason 43% of Your Tenants Leave"
                 className="mt-1"
               />
@@ -662,7 +780,9 @@ export default function EmailTemplatesPage() {
               <Textarea
                 id="hook"
                 value={formData.hook}
-                onChange={(e) => setFormData({ ...formData, hook: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, hook: e.target.value })
+                }
                 placeholder="e.g., Your Pool/Gym Won't Stop This Bleeding – But This Will"
                 className="mt-1"
                 rows={2}
@@ -674,7 +794,9 @@ export default function EmailTemplatesPage() {
               <Textarea
                 id="body"
                 value={formData.body}
-                onChange={(e) => setFormData({ ...formData, body: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, body: e.target.value })
+                }
                 placeholder="Enter your email content here..."
                 className="mt-1"
                 rows={8}
@@ -686,7 +808,9 @@ export default function EmailTemplatesPage() {
               <Textarea
                 id="signature"
                 value={formData.signature}
-                onChange={(e) => setFormData({ ...formData, signature: e.target.value })}
+                onChange={(e) =>
+                  setFormData({ ...formData, signature: e.target.value })
+                }
                 placeholder="e.g., Lyndon S.\nTotal Body Mobile Massage – Outreach Team"
                 className="mt-1"
                 rows={3}
@@ -697,14 +821,20 @@ export default function EmailTemplatesPage() {
               <Switch
                 id="is_active"
                 checked={formData.is_active}
-                onCheckedChange={(checked) => setFormData({ ...formData, is_active: checked })}
+                onCheckedChange={(checked) =>
+                  setFormData({ ...formData, is_active: checked })
+                }
               />
               <Label htmlFor="is_active">Active Template</Label>
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog} disabled={saving}>
+            <Button
+              variant="outline"
+              onClick={handleCloseDialog}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button onClick={handleSaveTemplate} disabled={saving}>
@@ -724,18 +854,26 @@ export default function EmailTemplatesPage() {
       </Dialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+      <AlertDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Email Template</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete the template "{templateToDelete?.template_name}"? This action cannot be
-              undone.
+              Are you sure you want to delete the template "
+              {templateToDelete?.template_name}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteCancel}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+            <AlertDialogCancel onClick={handleDeleteCancel}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
               Delete Template
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -747,37 +885,57 @@ export default function EmailTemplatesPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Email Template Preview</DialogTitle>
-            <DialogDescription>Preview of "{previewTemplate?.template_name}"</DialogDescription>
+            <DialogDescription>
+              Preview of "{previewTemplate?.template_name}"
+            </DialogDescription>
           </DialogHeader>
 
           {previewTemplate && (
             <div className="space-y-4">
               <div>
-                <Label className="text-sm font-medium text-gray-700">Subject:</Label>
-                <div className="mt-1 p-3 bg-gray-50 rounded-md">{previewTemplate.subject || "No subject"}</div>
+                <Label className="text-sm font-medium text-gray-700">
+                  Subject:
+                </Label>
+                <div className="mt-1 p-3 bg-gray-50 rounded-md">
+                  {previewTemplate.subject || "No subject"}
+                </div>
               </div>
 
               {previewTemplate.hook && (
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Hook:</Label>
-                  <div className="mt-1 p-3 bg-gray-50 rounded-md">{previewTemplate.hook}</div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Hook:
+                  </Label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded-md">
+                    {previewTemplate.hook}
+                  </div>
                 </div>
               )}
 
               <div>
-                <Label className="text-sm font-medium text-gray-700">Body:</Label>
-                <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">{previewTemplate.body}</div>
+                <Label className="text-sm font-medium text-gray-700">
+                  Body:
+                </Label>
+                <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">
+                  {previewTemplate.body}
+                </div>
               </div>
 
               {previewTemplate.signature && (
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">Signature:</Label>
-                  <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">{previewTemplate.signature}</div>
+                  <Label className="text-sm font-medium text-gray-700">
+                    Signature:
+                  </Label>
+                  <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">
+                    {previewTemplate.signature}
+                  </div>
                 </div>
               )}
 
               <div className="flex items-center space-x-2">
-                <Badge variant={previewTemplate.is_active ? "default" : "secondary"}>
+                <Badge
+                  variant={previewTemplate.is_active ? "default" : "secondary"}
+                >
                   {previewTemplate.is_active ? "Active" : "Inactive"}
                 </Badge>
               </div>
@@ -790,8 +948,8 @@ export default function EmailTemplatesPage() {
             </Button>
             <Button
               onClick={() => {
-                setIsPreviewOpen(false)
-                handleOpenDialog(previewTemplate!)
+                setIsPreviewOpen(false);
+                handleOpenDialog(previewTemplate!);
               }}
             >
               Edit Template
@@ -800,5 +958,5 @@ export default function EmailTemplatesPage() {
         </DialogContent>
       </Dialog>
     </div>
-  )
+  );
 }
