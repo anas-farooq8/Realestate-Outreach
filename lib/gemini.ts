@@ -8,7 +8,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: string): Promise<string[]> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" })
 
     const prompt = `
       Analyze this image and extract all residential community names, subdivision names, or neighborhood names that you can see.
@@ -86,7 +86,7 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
 
 export async function enrichPropertyData(propertyName: string, parentAddress: string) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" })
 
     const prompt = `
       You are a real estate research assistant. Find detailed HOA or property management contact information for the residential community "${propertyName}" located in or near "${parentAddress}".
@@ -161,6 +161,18 @@ export async function enrichPropertyData(propertyName: string, parentAddress: st
     }
   } catch (error) {
     console.error("Error enriching property data:", error)
-    throw new Error(`Failed to enrich data for property: ${propertyName}`)
+
+    // Return empty structure instead of throwing error to prevent processing failure
+    return {
+      management_company: null,
+      decision_maker_name: null,
+      email: null,
+      phone: null,
+      street_address: null,
+      city: null,
+      county: null,
+      state: null,
+      zip_code: null,
+    }
   }
 }

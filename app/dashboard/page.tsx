@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Download, RefreshCw, Filter, Search } from "lucide-react"
 import { exportToExcel } from "@/lib/excel-export"
@@ -23,9 +24,8 @@ export default function DashboardPage() {
     state: "all",
     county: "all",
     city: "all",
-    zipCode: "",
-    dateFrom: "",
-    dateTo: "",
+    zipCode: "all",
+    subscriptionStatus: "all",
   })
 
   const { toast } = useToast()
@@ -62,6 +62,12 @@ export default function DashboardPage() {
     }
   }
 
+  const isSubscribed = (suspendUntil: string) => {
+    const suspendDate = new Date(suspendUntil)
+    const currentDate = new Date()
+    return suspendDate < currentDate
+  }
+
   const applyFilters = () => {
     let filtered = [...properties]
 
@@ -78,34 +84,30 @@ export default function DashboardPage() {
 
     // State filter
     if (filters.state !== "all") {
-      filtered = filtered.filter((property) => property.state?.toLowerCase().includes(filters.state.toLowerCase()))
+      filtered = filtered.filter((property) => property.state?.toLowerCase() === filters.state.toLowerCase())
     }
 
     // County filter
     if (filters.county !== "all") {
-      filtered = filtered.filter((property) => property.county?.toLowerCase().includes(filters.county.toLowerCase()))
+      filtered = filtered.filter((property) => property.county?.toLowerCase() === filters.county.toLowerCase())
     }
 
     // City filter
     if (filters.city !== "all") {
-      filtered = filtered.filter((property) => property.city?.toLowerCase().includes(filters.city.toLowerCase()))
+      filtered = filtered.filter((property) => property.city?.toLowerCase() === filters.city.toLowerCase())
     }
 
     // Zip code filter
-    if (filters.zipCode) {
-      filtered = filtered.filter((property) => property.zip_code?.includes(filters.zipCode))
+    if (filters.zipCode !== "all") {
+      filtered = filtered.filter((property) => property.zip_code === filters.zipCode)
     }
 
-    // Date filters
-    if (filters.dateFrom) {
-      const fromDate = new Date(filters.dateFrom)
-      filtered = filtered.filter((property) => new Date(property.created_at) >= fromDate)
-    }
-
-    if (filters.dateTo) {
-      const toDate = new Date(filters.dateTo)
-      toDate.setHours(23, 59, 59, 999)
-      filtered = filtered.filter((property) => new Date(property.created_at) <= toDate)
+    // Subscription status filter
+    if (filters.subscriptionStatus !== "all") {
+      filtered = filtered.filter((property) => {
+        const subscribed = isSubscribed(property.suspend_until)
+        return filters.subscriptionStatus === "subscribed" ? subscribed : !subscribed
+      })
     }
 
     setFilteredProperties(filtered)
@@ -117,9 +119,8 @@ export default function DashboardPage() {
       state: "all",
       county: "all",
       city: "all",
-      zipCode: "",
-      dateFrom: "",
-      dateTo: "",
+      zipCode: "all",
+      subscriptionStatus: "all",
     })
     setFilteredProperties(properties)
   }
@@ -147,6 +148,7 @@ export default function DashboardPage() {
   const uniqueStates = [...new Set(properties.map((p) => p.state).filter(Boolean))].sort()
   const uniqueCounties = [...new Set(properties.map((p) => p.county).filter(Boolean))].sort()
   const uniqueCities = [...new Set(properties.map((p) => p.city).filter(Boolean))].sort()
+  const uniqueZipCodes = [...new Set(properties.map((p) => p.zip_code).filter(Boolean))].sort()
 
   useEffect(() => {
     fetchProperties()
@@ -254,23 +256,40 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="dateFrom">From Date</Label>
-                    <Input
-                      id="dateFrom"
-                      type="date"
-                      value={filters.dateFrom}
-                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                    />
+                    <Label>Zip Code</Label>
+                    <Select
+                      value={filters.zipCode}
+                      onValueChange={(value) => setFilters({ ...filters, zipCode: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All zip codes" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All zip codes</SelectItem>
+                        {uniqueZipCodes.map((zipCode) => (
+                          <SelectItem key={zipCode} value={zipCode}>
+                            {zipCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="dateTo">To Date</Label>
-                    <Input
-                      id="dateTo"
-                      type="date"
-                      value={filters.dateTo}
-                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                    />
+                    <Label>Subscription Status</Label>
+                    <Select
+                      value={filters.subscriptionStatus}
+                      onValueChange={(value) => setFilters({ ...filters, subscriptionStatus: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="subscribed">Subscribed</SelectItem>
+                        <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -315,6 +334,7 @@ export default function DashboardPage() {
                         <TableHead>County</TableHead>
                         <TableHead>State</TableHead>
                         <TableHead>Zip</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -345,6 +365,11 @@ export default function DashboardPage() {
                           <TableCell>{property.county || "—"}</TableCell>
                           <TableCell>{property.state || "—"}</TableCell>
                           <TableCell>{property.zip_code || "—"}</TableCell>
+                          <TableCell>
+                            <Badge variant={isSubscribed(property.suspend_until) ? "default" : "secondary"}>
+                              {isSubscribed(property.suspend_until) ? "Subscribed" : "Unsubscribed"}
+                            </Badge>
+                          </TableCell>
                           <TableCell>{new Date(property.created_at).toLocaleDateString()}</TableCell>
                         </TableRow>
                       ))}

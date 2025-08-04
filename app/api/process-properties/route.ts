@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
 
 async function processPropertiesAsync(properties: string[], parentAddress: string, userEmail: string, supabase: any) {
   let processedCount = 0
-  const batchSize = 3
+  const batchSize = 2
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
   try {
@@ -49,12 +49,17 @@ async function processPropertiesAsync(properties: string[], parentAddress: strin
       for (const propertyName of batch) {
         try {
           if (processedCount > 0) {
-            await delay(3000)
+            // Longer delay to avoid rate limits
+            await delay(10000) // 10 seconds between requests
           }
 
           const enrichedData = await enrichPropertyData(propertyName, parentAddress)
 
-          // Insert into properties table with new schema
+          // Generate unique email if none found
+          const uniqueEmail =
+            enrichedData.email || `noemail+${Date.now()}+${Math.random().toString(36).substr(2, 9)}@example.com`
+
+          // Insert into properties table with correct schema
           const { error: insertError } = await supabase.from("properties").insert({
             property_address: `${propertyName}, ${parentAddress}`,
             street: enrichedData.street_address,
@@ -63,7 +68,7 @@ async function processPropertiesAsync(properties: string[], parentAddress: strin
             state: enrichedData.state,
             zip_code: enrichedData.zip_code,
             decision_maker_name: enrichedData.decision_maker_name,
-            decision_maker_email: enrichedData.email || `noemail+${Date.now()}@example.com`, // Required field
+            decision_maker_email: uniqueEmail,
             decision_maker_phone: enrichedData.phone,
             hoa_or_management_company: enrichedData.management_company,
             suspend_until: new Date().toISOString().split("T")[0], // Today's date
@@ -73,9 +78,11 @@ async function processPropertiesAsync(properties: string[], parentAddress: strin
             console.error("Error inserting property:", insertError)
           } else {
             processedCount++
+            console.log(`Successfully processed property: ${propertyName}`)
           }
         } catch (error) {
           console.error(`Error processing property ${propertyName}:`, error)
+          // Continue processing other properties even if one fails
         }
       }
     }

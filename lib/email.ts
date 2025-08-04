@@ -6,42 +6,27 @@ const transporter = nodemailer.createTransport({
   secure: false,
   auth: {
     user: process.env.EMAIL_USER || "TBMMoutreach@gmail.com",
-    pass: process.env.EMAIL_PASSWORD || "#Protect3d",
+    pass: process.env.EMAIL_PASSWORD,
   },
 })
 
 export async function sendCompletionEmail(userEmail: string, totalProperties: number, processedProperties: number) {
   try {
-    const subject = "Property Data Processing Complete"
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #333;">Property Data Processing Complete</h2>
-        <p>Hello,</p>
-        <p>Your property data enrichment process has been completed successfully.</p>
-        
-        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="margin-top: 0;">Processing Summary:</h3>
-          <ul>
-            <li><strong>Total Properties:</strong> ${totalProperties}</li>
-            <li><strong>Successfully Processed:</strong> ${processedProperties}</li>
-            <li><strong>Success Rate:</strong> ${Math.round((processedProperties / totalProperties) * 100)}%</li>
-          </ul>
-        </div>
-        
-        <p>You can now view and export your enriched property data from the dashboard.</p>
-        
-        <p>Best regards,<br>Real Estate Outreach Team</p>
-      </div>
-    `
-
-    await transporter.sendMail({
+    const mailOptions = {
       from: process.env.EMAIL_USER || "TBMMoutreach@gmail.com",
       to: userEmail,
-      subject,
-      html,
-    })
+      subject: "Property Processing Complete",
+      html: `
+        <h2>Property Processing Complete</h2>
+        <p>Your property processing has been completed.</p>
+        <p><strong>Total Properties:</strong> ${totalProperties}</p>
+        <p><strong>Successfully Processed:</strong> ${processedProperties}</p>
+        <p>You can now view your properties in the dashboard.</p>
+      `,
+    }
 
-    console.log("Completion email sent successfully to:", userEmail)
+    await transporter.sendMail(mailOptions)
+    console.log("Completion email sent successfully")
   } catch (error) {
     console.error("Error sending completion email:", error)
   }
