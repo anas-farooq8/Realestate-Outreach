@@ -4,18 +4,23 @@ import type { Property } from "./types"
 export function exportToExcel(properties: Property[], filename: string) {
   // Prepare data for Excel export
   const excelData = properties.map((property) => ({
-    "Community Name": property.community_name,
-    "Management Company": property.management_company || "",
-    "Decision Maker": property.decision_maker_name || "",
-    Email: property.email || "",
-    Phone: property.phone || "",
-    "Street Address": property.street_address || "",
+    "Property Address": property.property_address || "",
+    Street: property.street || "",
     City: property.city || "",
     County: property.county || "",
     State: property.state || "",
     "Zip Code": property.zip_code || "",
-    "Parent Address": property.parent_address || "",
+    "HOA/Management Company": property.hoa_or_management_company || "",
+    "Decision Maker": property.decision_maker_name || "",
+    Email:
+      property.decision_maker_email && !property.decision_maker_email.includes("noemail")
+        ? property.decision_maker_email
+        : "",
+    Phone: property.decision_maker_phone || "",
+    "Suspend Until": property.suspend_until || "",
+    "Opt Out Code": property.opt_out_code || "",
     "Created Date": new Date(property.created_at).toLocaleDateString(),
+    "Updated Date": new Date(property.updated_at).toLocaleDateString(),
   }))
 
   // Create workbook and worksheet

@@ -24,30 +24,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Parent address is required" }, { status: 400 })
     }
 
-    // Create upload record
-    const { data: uploadRecord, error: uploadError } = await supabase
-      .from("uploads")
-      .insert({
-        filename,
-        parent_address: parentAddress,
-        extracted_names: properties,
-        total_properties: properties.length,
-        processed_properties: 0,
-        status: "processing",
-      })
-      .select()
-      .single()
-
-    if (uploadError) {
-      throw uploadError
-    }
-
     // Process properties asynchronously
-    processPropertiesAsync(properties, parentAddress, user.email!, uploadRecord.id, supabase)
+    processPropertiesAsync(properties, parentAddress, user.email!, supabase)
 
     return NextResponse.json({
       message: "Processing started",
-      uploadId: uploadRecord.id,
+      total: properties.length,
     })
   } catch (error) {
     console.error("Error in process-properties API:", error)
@@ -55,44 +37,36 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processPropertiesAsync(
-  properties: string[],
-  parentAddress: string,
-  userEmail: string,
-  uploadId: string,
-  supabase: any,
-) {
+async function processPropertiesAsync(properties: string[], parentAddress: string, userEmail: string, supabase: any) {
   let processedCount = 0
-  const batchSize = 3 // Process in smaller batches to avoid rate limits
+  const batchSize = 3
   const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
   try {
     for (let i = 0; i < properties.length; i += batchSize) {
       const batch = properties.slice(i, i + batchSize)
 
-      // Process batch with delay between requests
       for (const propertyName of batch) {
         try {
-          // Add delay to respect rate limits
           if (processedCount > 0) {
-            await delay(3000) // 3 second delay between requests
+            await delay(3000)
           }
 
           const enrichedData = await enrichPropertyData(propertyName, parentAddress)
 
-          // Insert into properties table
+          // Insert into properties table with new schema
           const { error: insertError } = await supabase.from("properties").insert({
-            community_name: propertyName,
-            management_company: enrichedData.management_company,
-            decision_maker_name: enrichedData.decision_maker_name,
-            email: enrichedData.email,
-            phone: enrichedData.phone,
-            street_address: enrichedData.street_address,
+            property_address: `${propertyName}, ${parentAddress}`,
+            street: enrichedData.street_address,
             city: enrichedData.city,
             county: enrichedData.county,
             state: enrichedData.state,
             zip_code: enrichedData.zip_code,
-            parent_address: parentAddress,
+            decision_maker_name: enrichedData.decision_maker_name,
+            decision_maker_email: enrichedData.email || `noemail+${Date.now()}@example.com`, // Required field
+            decision_maker_phone: enrichedData.phone,
+            hoa_or_management_company: enrichedData.management_company,
+            suspend_until: new Date().toISOString().split("T")[0], // Today's date
           })
 
           if (insertError) {
@@ -100,37 +74,15 @@ async function processPropertiesAsync(
           } else {
             processedCount++
           }
-
-          // Update progress
-          await supabase.from("uploads").update({ processed_properties: processedCount }).eq("id", uploadId)
         } catch (error) {
           console.error(`Error processing property ${propertyName}:`, error)
-          // Continue processing other properties even if one fails
         }
       }
     }
-
-    // Mark as completed
-    await supabase
-      .from("uploads")
-      .update({
-        status: "completed",
-        processed_properties: processedCount,
-      })
-      .eq("id", uploadId)
 
     // Send completion email
     await sendCompletionEmail(userEmail, properties.length, processedCount)
   } catch (error) {
     console.error("Error in async processing:", error)
-
-    // Mark as failed
-    await supabase
-      .from("uploads")
-      .update({
-        status: "failed",
-        processed_properties: processedCount,
-      })
-      .eq("id", uploadId)
   }
 }

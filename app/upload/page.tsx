@@ -221,7 +221,15 @@ export default function UploadPage() {
               <div className="space-y-4">
                 <div>
                   <Label htmlFor="image-upload">Choose Image File</Label>
-                  <Input id="image-upload" type="file" accept="image/*" onChange={handleFileSelect} className="mt-1" />
+                  <div className="mt-1 relative">
+                    <Input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="cursor-pointer file:cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
+                    />
+                  </div>
                 </div>
 
                 {imagePreview && (
@@ -265,9 +273,9 @@ export default function UploadPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="rounded-md border">
+                  <div className="rounded-md border max-h-96 overflow-y-auto">
                     <Table>
-                      <TableHeader>
+                      <TableHeader className="sticky top-0 bg-white z-10">
                         <TableRow>
                           <TableHead>Property Name</TableHead>
                           <TableHead className="w-32">Actions</TableHead>

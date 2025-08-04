@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Download, RefreshCw, Filter } from "lucide-react"
+import { Download, RefreshCw, Filter, Search } from "lucide-react"
 import { exportToExcel } from "@/lib/excel-export"
 import type { Property } from "@/lib/types"
 
@@ -17,9 +18,12 @@ export default function DashboardPage() {
   const [properties, setProperties] = useState<Property[]>([])
   const [filteredProperties, setFilteredProperties] = useState<Property[]>([])
   const [loading, setLoading] = useState(true)
+  const [searchTerm, setSearchTerm] = useState("")
   const [filters, setFilters] = useState({
+    state: "all",
+    county: "all",
+    city: "all",
     zipCode: "",
-    county: "",
     dateFrom: "",
     dateTo: "",
   })
@@ -61,14 +65,38 @@ export default function DashboardPage() {
   const applyFilters = () => {
     let filtered = [...properties]
 
-    if (filters.zipCode) {
-      filtered = filtered.filter((property) => property.zip_code?.toLowerCase().includes(filters.zipCode.toLowerCase()))
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (property) =>
+          property.property_address?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          property.decision_maker_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          property.hoa_or_management_company?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          property.decision_maker_email?.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
     }
 
-    if (filters.county) {
+    // State filter
+    if (filters.state !== "all") {
+      filtered = filtered.filter((property) => property.state?.toLowerCase().includes(filters.state.toLowerCase()))
+    }
+
+    // County filter
+    if (filters.county !== "all") {
       filtered = filtered.filter((property) => property.county?.toLowerCase().includes(filters.county.toLowerCase()))
     }
 
+    // City filter
+    if (filters.city !== "all") {
+      filtered = filtered.filter((property) => property.city?.toLowerCase().includes(filters.city.toLowerCase()))
+    }
+
+    // Zip code filter
+    if (filters.zipCode) {
+      filtered = filtered.filter((property) => property.zip_code?.includes(filters.zipCode))
+    }
+
+    // Date filters
     if (filters.dateFrom) {
       const fromDate = new Date(filters.dateFrom)
       filtered = filtered.filter((property) => new Date(property.created_at) >= fromDate)
@@ -76,7 +104,7 @@ export default function DashboardPage() {
 
     if (filters.dateTo) {
       const toDate = new Date(filters.dateTo)
-      toDate.setHours(23, 59, 59, 999) // End of day
+      toDate.setHours(23, 59, 59, 999)
       filtered = filtered.filter((property) => new Date(property.created_at) <= toDate)
     }
 
@@ -84,9 +112,12 @@ export default function DashboardPage() {
   }
 
   const clearFilters = () => {
+    setSearchTerm("")
     setFilters({
+      state: "all",
+      county: "all",
+      city: "all",
       zipCode: "",
-      county: "",
       dateFrom: "",
       dateTo: "",
     })
@@ -112,13 +143,18 @@ export default function DashboardPage() {
     })
   }
 
+  // Get unique values for filter dropdowns
+  const uniqueStates = [...new Set(properties.map((p) => p.state).filter(Boolean))].sort()
+  const uniqueCounties = [...new Set(properties.map((p) => p.county).filter(Boolean))].sort()
+  const uniqueCities = [...new Set(properties.map((p) => p.city).filter(Boolean))].sort()
+
   useEffect(() => {
     fetchProperties()
   }, [])
 
   useEffect(() => {
     applyFilters()
-  }, [filters, properties])
+  }, [searchTerm, filters, properties])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -142,58 +178,107 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Filters */}
+          {/* Search and Filters */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
                 <Filter className="mr-2 h-5 w-5" />
-                Filters
+                Search & Filters
               </CardTitle>
-              <CardDescription>Filter properties by location and date</CardDescription>
+              <CardDescription>Search and filter properties by various criteria</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="zipCode">Zip Code</Label>
+              <div className="space-y-4">
+                {/* Search */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    id="zipCode"
-                    placeholder="Enter zip code"
-                    value={filters.zipCode}
-                    onChange={(e) => setFilters({ ...filters, zipCode: e.target.value })}
+                    placeholder="Search properties, names, companies, or emails..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="county">County</Label>
-                  <Input
-                    id="county"
-                    placeholder="Enter county"
-                    value={filters.county}
-                    onChange={(e) => setFilters({ ...filters, county: e.target.value })}
-                  />
+
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="space-y-2">
+                    <Label>State</Label>
+                    <Select value={filters.state} onValueChange={(value) => setFilters({ ...filters, state: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All states" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All states</SelectItem>
+                        {uniqueStates.map((state) => (
+                          <SelectItem key={state} value={state}>
+                            {state}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>County</Label>
+                    <Select value={filters.county} onValueChange={(value) => setFilters({ ...filters, county: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All counties" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All counties</SelectItem>
+                        {uniqueCounties.map((county) => (
+                          <SelectItem key={county} value={county}>
+                            {county}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>City</Label>
+                    <Select value={filters.city} onValueChange={(value) => setFilters({ ...filters, city: value })}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="All cities" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All cities</SelectItem>
+                        {uniqueCities.map((city) => (
+                          <SelectItem key={city} value={city}>
+                            {city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dateFrom">From Date</Label>
+                    <Input
+                      id="dateFrom"
+                      type="date"
+                      value={filters.dateFrom}
+                      onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="dateTo">To Date</Label>
+                    <Input
+                      id="dateTo"
+                      type="date"
+                      value={filters.dateTo}
+                      onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dateFrom">From Date</Label>
-                  <Input
-                    id="dateFrom"
-                    type="date"
-                    value={filters.dateFrom}
-                    onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
-                  />
+
+                <div className="flex space-x-2">
+                  <Button onClick={clearFilters} variant="outline" size="sm">
+                    Clear All Filters
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="dateTo">To Date</Label>
-                  <Input
-                    id="dateTo"
-                    type="date"
-                    value={filters.dateTo}
-                    onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="mt-4">
-                <Button onClick={clearFilters} variant="outline" size="sm">
-                  Clear Filters
-                </Button>
               </div>
             </CardContent>
           </Card>
@@ -221,33 +306,44 @@ export default function DashboardPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Community Name</TableHead>
-                        <TableHead>Management Company</TableHead>
+                        <TableHead>Property Address</TableHead>
+                        <TableHead>HOA/Management</TableHead>
                         <TableHead>Decision Maker</TableHead>
-                        <TableHead>Phone</TableHead>
                         <TableHead>Email</TableHead>
+                        <TableHead>Phone</TableHead>
+                        <TableHead>City</TableHead>
                         <TableHead>County</TableHead>
-                        <TableHead>Zip Code</TableHead>
+                        <TableHead>State</TableHead>
+                        <TableHead>Zip</TableHead>
                         <TableHead>Created</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filteredProperties.map((property) => (
                         <TableRow key={property.id}>
-                          <TableCell className="font-medium">{property.community_name}</TableCell>
-                          <TableCell>{property.management_company || "—"}</TableCell>
+                          <TableCell className="font-medium max-w-xs truncate">
+                            {property.property_address || "—"}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {property.hoa_or_management_company || "—"}
+                          </TableCell>
                           <TableCell>{property.decision_maker_name || "—"}</TableCell>
-                          <TableCell>{property.phone || "—"}</TableCell>
                           <TableCell>
-                            {property.email ? (
-                              <a href={`mailto:${property.email}`} className="text-blue-600 hover:underline">
-                                {property.email}
+                            {property.decision_maker_email && !property.decision_maker_email.includes("noemail") ? (
+                              <a
+                                href={`mailto:${property.decision_maker_email}`}
+                                className="text-blue-600 hover:underline truncate block max-w-xs"
+                              >
+                                {property.decision_maker_email}
                               </a>
                             ) : (
                               "—"
                             )}
                           </TableCell>
+                          <TableCell>{property.decision_maker_phone || "—"}</TableCell>
+                          <TableCell>{property.city || "—"}</TableCell>
                           <TableCell>{property.county || "—"}</TableCell>
+                          <TableCell>{property.state || "—"}</TableCell>
                           <TableCell>{property.zip_code || "—"}</TableCell>
                           <TableCell>{new Date(property.created_at).toLocaleDateString()}</TableCell>
                         </TableRow>
