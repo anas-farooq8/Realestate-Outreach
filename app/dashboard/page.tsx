@@ -8,9 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Download, Filter, RefreshCw } from "lucide-react"
+import { Download, RefreshCw, Filter } from "lucide-react"
 import { exportToExcel } from "@/lib/excel-export"
 import type { Property } from "@/lib/types"
 
@@ -63,34 +62,29 @@ export default function DashboardPage() {
     }
   }
 
-  useEffect(() => {
-    fetchProperties()
-  }, [])
-
-  useEffect(() => {
+  const applyFilters = () => {
     let filtered = [...properties]
 
     if (filters.zipCode) {
-      filtered = filtered.filter((p) => p.zip_code?.toLowerCase().includes(filters.zipCode.toLowerCase()))
+      filtered = filtered.filter((property) => property.zip_code?.toLowerCase().includes(filters.zipCode.toLowerCase()))
     }
 
     if (filters.county) {
-      filtered = filtered.filter((p) => p.county?.toLowerCase().includes(filters.county.toLowerCase()))
+      filtered = filtered.filter((property) => property.county?.toLowerCase().includes(filters.county.toLowerCase()))
     }
 
     if (filters.dateFrom) {
-      filtered = filtered.filter((p) => new Date(p.created_at) >= new Date(filters.dateFrom))
+      const fromDate = new Date(filters.dateFrom)
+      filtered = filtered.filter((property) => new Date(property.created_at) >= fromDate)
     }
 
     if (filters.dateTo) {
-      filtered = filtered.filter((p) => new Date(p.created_at) <= new Date(filters.dateTo + "T23:59:59"))
+      const toDate = new Date(filters.dateTo)
+      toDate.setHours(23, 59, 59, 999) // End of day
+      filtered = filtered.filter((property) => new Date(property.created_at) <= toDate)
     }
 
     setFilteredProperties(filtered)
-  }, [properties, filters])
-
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
   const clearFilters = () => {
@@ -100,6 +94,7 @@ export default function DashboardPage() {
       dateFrom: "",
       dateTo: "",
     })
+    setFilteredProperties(properties)
   }
 
   const handleExport = () => {
@@ -112,30 +107,22 @@ export default function DashboardPage() {
       return
     }
 
-    try {
-      const filename = `properties-${new Date().toISOString().split("T")[0]}.xlsx`
-      exportToExcel(filteredProperties, filename)
-      toast({
-        title: "Success",
-        description: `Exported ${filteredProperties.length} properties to Excel`,
-      })
-    } catch (error) {
-      console.error("Export error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to export data",
-        variant: "destructive",
-      })
-    }
+    const filename = `properties_${new Date().toISOString().split("T")[0]}.xlsx`
+    exportToExcel(filteredProperties, filename)
+
+    toast({
+      title: "Export Successful",
+      description: `Exported ${filteredProperties.length} properties to ${filename}`,
+    })
   }
 
-  const getUniqueValues = (key: keyof Property) => {
-    const values = properties
-      .map((p) => p[key])
-      .filter(Boolean)
-      .filter((value, index, self) => self.indexOf(value) === index)
-    return values as string[]
-  }
+  useEffect(() => {
+    fetchProperties()
+  }, [])
+
+  useEffect(() => {
+    applyFilters()
+  }, [filters, properties])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -145,11 +132,11 @@ export default function DashboardPage() {
           <div className="flex justify-between items-center">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Properties Dashboard</h1>
-              <p className="mt-2 text-gray-600">Manage and export your enriched community contact data</p>
+              <p className="mt-2 text-gray-600">Manage and export your enriched property contact data</p>
             </div>
-            <div className="flex space-x-2">
-              <Button onClick={fetchProperties} variant="outline">
-                <RefreshCw className="mr-2 h-4 w-4" />
+            <div className="flex space-x-4">
+              <Button onClick={fetchProperties} variant="outline" disabled={loading}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
               <Button onClick={handleExport} disabled={filteredProperties.length === 0}>
@@ -159,11 +146,12 @@ export default function DashboardPage() {
             </div>
           </div>
 
+          {/* Filters */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Filter className="h-5 w-5" />
-                <span>Filters</span>
+              <CardTitle className="flex items-center">
+                <Filter className="mr-2 h-5 w-5" />
+                Filters
               </CardTitle>
               <CardDescription>Filter properties by location and date</CardDescription>
             </CardHeader>
@@ -175,52 +163,46 @@ export default function DashboardPage() {
                     id="zipCode"
                     placeholder="Enter zip code"
                     value={filters.zipCode}
-                    onChange={(e) => handleFilterChange("zipCode", e.target.value)}
+                    onChange={(e) => setFilters({ ...filters, zipCode: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="county">County</Label>
-                  <Select value={filters.county} onValueChange={(value) => handleFilterChange("county", value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select county" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Counties</SelectItem>
-                      {getUniqueValues("county").map((county) => (
-                        <SelectItem key={county} value={county}>
-                          {county}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="county"
+                    placeholder="Enter county"
+                    value={filters.county}
+                    onChange={(e) => setFilters({ ...filters, county: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dateFrom">Date From</Label>
+                  <Label htmlFor="dateFrom">From Date</Label>
                   <Input
                     id="dateFrom"
                     type="date"
                     value={filters.dateFrom}
-                    onChange={(e) => handleFilterChange("dateFrom", e.target.value)}
+                    onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dateTo">Date To</Label>
+                  <Label htmlFor="dateTo">To Date</Label>
                   <Input
                     id="dateTo"
                     type="date"
                     value={filters.dateTo}
-                    onChange={(e) => handleFilterChange("dateTo", e.target.value)}
+                    onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                   />
                 </div>
               </div>
               <div className="mt-4">
-                <Button variant="outline" onClick={clearFilters}>
+                <Button onClick={clearFilters} variant="outline" size="sm">
                   Clear Filters
                 </Button>
               </div>
             </CardContent>
           </Card>
 
+          {/* Properties Table */}
           <Card>
             <CardHeader>
               <CardTitle>Properties ({filteredProperties.length})</CardTitle>
@@ -232,11 +214,11 @@ export default function DashboardPage() {
             <CardContent>
               {loading ? (
                 <div className="flex justify-center py-8">
-                  <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+                  <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
               ) : filteredProperties.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  No properties found. Upload some community images to get started.
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No properties found</p>
                 </div>
               ) : (
                 <div className="rounded-md border overflow-x-auto">
@@ -257,20 +239,20 @@ export default function DashboardPage() {
                       {filteredProperties.map((property) => (
                         <TableRow key={property.id}>
                           <TableCell className="font-medium">{property.community_name}</TableCell>
-                          <TableCell>{property.management_company || "-"}</TableCell>
-                          <TableCell>{property.decision_maker_name || "-"}</TableCell>
-                          <TableCell>{property.phone || "-"}</TableCell>
+                          <TableCell>{property.management_company || "—"}</TableCell>
+                          <TableCell>{property.decision_maker_name || "—"}</TableCell>
+                          <TableCell>{property.phone || "—"}</TableCell>
                           <TableCell>
                             {property.email ? (
                               <a href={`mailto:${property.email}`} className="text-blue-600 hover:underline">
                                 {property.email}
                               </a>
                             ) : (
-                              "-"
+                              "—"
                             )}
                           </TableCell>
-                          <TableCell>{property.county || "-"}</TableCell>
-                          <TableCell>{property.zip_code || "-"}</TableCell>
+                          <TableCell>{property.county || "—"}</TableCell>
+                          <TableCell>{property.zip_code || "—"}</TableCell>
                           <TableCell>{new Date(property.created_at).toLocaleDateString()}</TableCell>
                         </TableRow>
                       ))}

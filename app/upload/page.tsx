@@ -44,6 +44,7 @@ export default function UploadPage() {
 
         setFile(selectedFile)
         setExtractedNames([])
+        setParentAddress("")
 
         // Create preview URL
         const url = URL.createObjectURL(selectedFile)
@@ -54,10 +55,10 @@ export default function UploadPage() {
   )
 
   const extractNames = async () => {
-    if (!file || !parentAddress.trim()) {
+    if (!file) {
       toast({
-        title: "Missing Information",
-        description: "Please select an image and enter a parent address",
+        title: "Missing File",
+        description: "Please select an image first",
         variant: "destructive",
       })
       return
@@ -67,7 +68,6 @@ export default function UploadPage() {
     try {
       const formData = new FormData()
       formData.append("image", file)
-      formData.append("parentAddress", parentAddress)
 
       const response = await fetch("/api/extract-names", {
         method: "POST",
@@ -79,7 +79,31 @@ export default function UploadPage() {
       }
 
       const data = await response.json()
-      const communities: ExtractedCommunity[] = data.names.map((name: string, index: number) => ({
+
+      // Parse the JSON response properly
+      let communityNames: string[] = []
+
+      if (Array.isArray(data.names)) {
+        communityNames = data.names
+      } else if (typeof data.names === "string") {
+        try {
+          // Try to parse if it's a JSON string
+          const parsed = JSON.parse(data.names)
+          if (Array.isArray(parsed)) {
+            communityNames = parsed
+          } else if (parsed.communities && Array.isArray(parsed.communities)) {
+            communityNames = parsed.communities
+          }
+        } catch {
+          // If parsing fails, split by common delimiters
+          communityNames = data.names
+            .split(/[,\n\r]+/)
+            .map((name: string) => name.trim())
+            .filter(Boolean)
+        }
+      }
+
+      const communities: ExtractedCommunity[] = communityNames.map((name: string, index: number) => ({
         id: `${index}-${Date.now()}`,
         name: name.trim(),
         editable: false,
@@ -131,6 +155,15 @@ export default function UploadPage() {
       toast({
         title: "No Communities",
         description: "Please extract community names first",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!parentAddress.trim()) {
+      toast({
+        title: "Missing Parent Address",
+        description: "Please enter a parent address",
         variant: "destructive",
       })
       return
@@ -221,17 +254,7 @@ export default function UploadPage() {
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label htmlFor="parentAddress">Parent Address</Label>
-                <Input
-                  id="parentAddress"
-                  placeholder="e.g., Palm Beach County, Florida"
-                  value={parentAddress}
-                  onChange={(e) => setParentAddress(e.target.value)}
-                />
-              </div>
-
-              <Button onClick={extractNames} disabled={!file || !parentAddress.trim() || loading} className="w-full">
+              <Button onClick={extractNames} disabled={!file || loading} className="w-full">
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <Upload className="mr-2 h-4 w-4" />
                 Extract Community Names
@@ -243,9 +266,11 @@ export default function UploadPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Extracted Communities ({extractedNames.length})</CardTitle>
-                <CardDescription>Review and edit the extracted community names before processing</CardDescription>
+                <CardDescription>
+                  Review and edit the extracted community names, then provide the parent address
+                </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-6">
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -306,10 +331,23 @@ export default function UploadPage() {
                   </Table>
                 </div>
 
-                <div className="mt-6">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="parentAddress">Parent Address</Label>
+                    <Input
+                      id="parentAddress"
+                      placeholder="e.g., Palm Beach County, Florida"
+                      value={parentAddress}
+                      onChange={(e) => setParentAddress(e.target.value)}
+                    />
+                    <p className="text-sm text-gray-500">
+                      Enter the general location or county where these communities are located
+                    </p>
+                  </div>
+
                   <Button
                     onClick={submitForProcessing}
-                    disabled={processing || extractedNames.length === 0}
+                    disabled={processing || extractedNames.length === 0 || !parentAddress.trim()}
                     className="w-full"
                     size="lg"
                   >

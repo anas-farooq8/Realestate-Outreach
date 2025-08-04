@@ -1,65 +1,86 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { LogOut, Home, Upload, BarChart3 } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { User, LogOut, Upload, BarChart3 } from "lucide-react"
 
 export function Navbar() {
+  const [user, setUser] = useState<any>(null)
   const router = useRouter()
-  const { toast } = useToast()
   const supabase = createClient()
 
-  const handleLogout = async () => {
-    try {
-      await supabase.auth.signOut()
-      toast({
-        title: "Success",
-        description: "Logged out successfully",
-      })
-      router.push("/login")
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log out",
-        variant: "destructive",
-      })
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+      setUser(user)
     }
+
+    getUser()
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [supabase.auth])
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    router.push("/login")
   }
 
   return (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
-          <div className="flex items-center space-x-8">
-            <Link href="/dashboard" className="flex items-center space-x-2">
-              <Home className="h-6 w-6 text-blue-600" />
-              <span className="font-bold text-xl text-gray-900">RE Outreach</span>
-            </Link>
-            <div className="flex space-x-4">
-              <Link
-                href="/dashboard"
-                className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              >
-                <BarChart3 className="h-4 w-4" />
-                <span>Dashboard</span>
-              </Link>
-              <Link
-                href="/upload"
-                className="flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50"
-              >
-                <Upload className="h-4 w-4" />
-                <span>Upload</span>
-              </Link>
-            </div>
-          </div>
           <div className="flex items-center">
-            <Button variant="ghost" onClick={handleLogout} className="flex items-center space-x-1">
-              <LogOut className="h-4 w-4" />
-              <span>Logout</span>
-            </Button>
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                <span className="text-white font-bold text-sm">RE</span>
+              </div>
+              <span className="font-semibold text-gray-900">Real Estate Outreach</span>
+            </Link>
+          </div>
+
+          <div className="flex items-center space-x-4">
+            {user && (
+              <>
+                <Link href="/upload">
+                  <Button variant="ghost" size="sm">
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload
+                  </Button>
+                </Link>
+                <Link href="/dashboard">
+                  <Button variant="ghost" size="sm">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Dashboard
+                  </Button>
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <User className="mr-2 h-4 w-4" />
+                      {user.email}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleSignOut}>
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
           </div>
         </div>
       </div>

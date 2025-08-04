@@ -15,10 +15,9 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData()
     const image = formData.get("image") as File
-    const parentAddress = formData.get("parentAddress") as string
 
-    if (!image || !parentAddress) {
-      return NextResponse.json({ error: "Image and parent address are required" }, { status: 400 })
+    if (!image) {
+      return NextResponse.json({ error: "Image is required" }, { status: 400 })
     }
 
     // Validate file type
