@@ -1,24 +1,19 @@
 export interface Property {
-  id: string
+  id: number
   property_address: string
-  property_name: string
-  city: string
-  state: string
-  county: string
-  zip_code: string
-  contact_name: string
-  contact_email: string
-  contact_phone: string
-  contact_title: string
-  company_name: string
-  website: string
-  linkedin_url: string
-  status: "pending" | "processing" | "completed" | "failed"
+  street?: string
+  city?: string
+  county?: string
+  state?: string
+  zip_code?: string
+  decision_maker_name?: string
+  decision_maker_email: string
+  decision_maker_phone?: string
+  hoa_or_management_company?: string
+  suspend_until?: string
+  opt_out_code?: string
   created_at: string
   updated_at: string
-  user_id: string
-  filename: string
-  parent_address: string
 }
 
 export interface ExtractedCommunity {
@@ -30,13 +25,25 @@ export interface ExtractedCommunity {
 export interface EmailTemplate {
   id: number
   template_name: string
-  subject: string | null
-  hook: string | null
+  subject?: string
+  hook?: string
   body: string
-  signature: string | null
+  signature?: string
   is_active: boolean
   created_at: string
   updated_at: string
+}
+
+export interface EnrichedPropertyData {
+  street_address?: string
+  city?: string
+  county?: string
+  state?: string
+  zip_code?: string
+  decision_maker_name?: string
+  email?: string
+  phone?: string
+  management_company?: string
 }
 
 export interface User {

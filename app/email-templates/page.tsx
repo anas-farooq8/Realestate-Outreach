@@ -21,6 +21,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   Pagination,
   PaginationContent,
   PaginationEllipsis,
@@ -41,6 +51,8 @@ export default function EmailTemplatesPage() {
   const [saving, setSaving] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
@@ -180,7 +192,7 @@ export default function EmailTemplatesPage() {
         // Update existing template
         result = await supabase.from("email_templates").update(templateData).eq("id", editingTemplate.id).select()
       } else {
-        // Create new template
+        // Create new template - let database auto-generate the ID
         result = await supabase
           .from("email_templates")
           .insert([
@@ -222,9 +234,16 @@ export default function EmailTemplatesPage() {
     }
   }
 
-  const handleDeleteTemplate = async (id: number) => {
+  const handleDeleteClick = (template: EmailTemplate) => {
+    setTemplateToDelete(template)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!templateToDelete) return
+
     try {
-      const { error } = await supabase.from("email_templates").delete().eq("id", id)
+      const { error } = await supabase.from("email_templates").delete().eq("id", templateToDelete.id)
 
       if (error) {
         console.error("Supabase error:", error)
@@ -237,7 +256,7 @@ export default function EmailTemplatesPage() {
       })
 
       // Optimistically update local state
-      setTemplates((prev) => prev.filter((t) => t.id !== id))
+      setTemplates((prev) => prev.filter((t) => t.id !== templateToDelete.id))
 
       // Adjust current page if necessary
       const newFilteredCount = filteredTemplates.length - 1
@@ -252,7 +271,15 @@ export default function EmailTemplatesPage() {
         description: error instanceof Error ? error.message : "Failed to delete email template",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleteDialogOpen(false)
+      setTemplateToDelete(null)
     }
+  }
+
+  const handleDeleteCancel = () => {
+    setIsDeleteDialogOpen(false)
+    setTemplateToDelete(null)
   }
 
   const handleToggleActive = async (id: number, isActive: boolean) => {
@@ -500,7 +527,7 @@ export default function EmailTemplatesPage() {
                                 <Button onClick={() => handleOpenDialog(template)} size="sm" variant="outline">
                                   <Edit2 className="h-4 w-4" />
                                 </Button>
-                                <Button onClick={() => handleDeleteTemplate(template.id)} size="sm" variant="outline">
+                                <Button onClick={() => handleDeleteClick(template)} size="sm" variant="outline">
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
                               </div>
@@ -640,6 +667,25 @@ export default function EmailTemplatesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Email Template</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the template "{templateToDelete?.template_name}"? This action cannot be
+              undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={handleDeleteCancel}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-red-600 hover:bg-red-700">
+              Delete Template
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Preview Template Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>

@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase/client"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,38 +11,35 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useToast } from "@/hooks/use-toast"
-import { Upload, Loader2, Edit2, Trash2, Plus } from "lucide-react"
+import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react"
 import type { ExtractedCommunity } from "@/lib/types"
 
 export default function UploadPage() {
-  const [file, setFile] = useState<File | null>(null)
-  const [extractedNames, setExtractedNames] = useState<ExtractedCommunity[]>([])
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [extractedProperties, setExtractedProperties] = useState<ExtractedCommunity[]>([])
   const [parentAddress, setParentAddress] = useState("")
   const [isExtracting, setIsExtracting] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [showNamesList, setShowNamesList] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState("")
+  const [editingValue, setEditingValue] = useState("")
 
   const { toast } = useToast()
   const router = useRouter()
-  const supabase = createClient()
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      // Validate file type
-      if (!selectedFile.type.startsWith("image/")) {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (!file.type.startsWith("image/")) {
         toast({
-          title: "Invalid File Type",
-          description: "Please select an image file (JPG, PNG, etc.)",
+          title: "Invalid File",
+          description: "Please select an image file (JPEG or PNG)",
           variant: "destructive",
         })
         return
       }
 
-      // Validate file size (max 10MB)
-      if (selectedFile.size > 10 * 1024 * 1024) {
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File Too Large",
           description: "Please select an image smaller than 10MB",
@@ -52,55 +48,62 @@ export default function UploadPage() {
         return
       }
 
-      setFile(selectedFile)
+      setSelectedFile(file)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
+
+      // Reset previous extraction
+      setExtractedProperties([])
+      setParentAddress("")
     }
   }
 
   const handleExtractNames = async () => {
-    if (!file) {
+    if (!selectedFile) {
       toast({
-        title: "No File Selected",
-        description: "Please select an image file first",
+        title: "No Image",
+        description: "Please select an image first",
         variant: "destructive",
       })
       return
     }
 
     setIsExtracting(true)
-
     try {
       const formData = new FormData()
-      formData.append("image", file)
+      formData.append("image", selectedFile)
 
       const response = await fetch("/api/extract-names", {
         method: "POST",
         body: formData,
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to extract names")
-      }
-
       const data = await response.json()
 
-      if (data.names && data.names.length > 0) {
-        const communities: ExtractedCommunity[] = data.names.map((name: string, index: number) => ({
-          id: `${Date.now()}-${index}`,
-          name: name.trim().toUpperCase(),
-          editable: true,
-        }))
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to extract names")
+      }
 
-        setExtractedNames(communities)
-        setShowNamesList(true)
+      if (data.names && data.names.length > 0) {
+        const properties = data.names.map((name: string, index: number) => ({
+          id: `property-${index}`,
+          name: name.trim(),
+          editable: false,
+        }))
+        setExtractedProperties(properties)
         toast({
-          title: "Names Extracted Successfully",
-          description: `Found ${communities.length} property names`,
+          title: "Success",
+          description: `Extracted ${properties.length} property names`,
         })
       } else {
         toast({
           title: "No Names Found",
-          description: "Could not extract any property names from the image",
+          description: "No property names could be extracted from this image",
           variant: "destructive",
         })
       }
@@ -108,7 +111,7 @@ export default function UploadPage() {
       console.error("Error extracting names:", error)
       toast({
         title: "Extraction Failed",
-        description: error.message || "Failed to extract names from image",
+        description: error instanceof Error ? error.message : "Failed to extract property names",
         variant: "destructive",
       })
     } finally {
@@ -116,45 +119,45 @@ export default function UploadPage() {
     }
   }
 
-  const handleEditName = (id: string, currentName: string) => {
+  const handleEditProperty = (id: string, currentName: string) => {
     setEditingId(id)
-    setEditingName(currentName)
+    setEditingValue(currentName)
   }
 
-  const handleSaveEdit = () => {
-    if (editingId && editingName.trim()) {
-      setExtractedNames((prev) =>
-        prev.map((item) => (item.id === editingId ? { ...item, name: editingName.trim().toUpperCase() } : item)),
+  const handleSaveEdit = (id: string) => {
+    if (editingValue.trim()) {
+      setExtractedProperties((prev) =>
+        prev.map((property) => (property.id === id ? { ...property, name: editingValue.trim() } : property)),
       )
-      setEditingId(null)
-      setEditingName("")
     }
+    setEditingId(null)
+    setEditingValue("")
   }
 
   const handleCancelEdit = () => {
     setEditingId(null)
-    setEditingName("")
+    setEditingValue("")
   }
 
-  const handleDeleteName = (id: string) => {
-    setExtractedNames((prev) => prev.filter((item) => item.id !== id))
+  const handleRemoveProperty = (id: string) => {
+    setExtractedProperties((prev) => prev.filter((property) => property.id !== id))
   }
 
-  const handleAddName = () => {
-    const newName: ExtractedCommunity = {
-      id: `${Date.now()}-new`,
-      name: "NEW PROPERTY",
-      editable: true,
+  const handleAddProperty = () => {
+    const newProperty: ExtractedCommunity = {
+      id: `property-${Date.now()}`,
+      name: "New Property",
+      editable: false,
     }
-    setExtractedNames((prev) => [...prev, newName])
-    handleEditName(newName.id, newName.name)
+    setExtractedProperties((prev) => [...prev, newProperty])
+    handleEditProperty(newProperty.id, newProperty.name)
   }
 
   const handleProcessProperties = async () => {
-    if (extractedNames.length === 0) {
+    if (extractedProperties.length === 0) {
       toast({
         title: "No Properties",
-        description: "Please extract or add property names first",
+        description: "Please extract property names first",
         variant: "destructive",
       })
       return
@@ -163,24 +166,15 @@ export default function UploadPage() {
     if (!parentAddress.trim()) {
       toast({
         title: "Missing Address",
-        description: "Please enter the parent address",
+        description: "Please enter a parent address",
         variant: "destructive",
       })
       return
     }
 
     setIsProcessing(true)
-
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
-
-      const propertyNames = extractedNames.map((item) => item.name)
+      const propertyNames = extractedProperties.map((p) => p.name)
 
       const response = await fetch("/api/process-properties", {
         method: "POST",
@@ -188,28 +182,22 @@ export default function UploadPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          propertyNames,
+          properties: propertyNames,
           parentAddress: parentAddress.trim(),
+          filename: selectedFile?.name || "uploaded-image",
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to process properties")
-      }
+      const data = await response.json()
 
-      const result = await response.json()
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to start processing")
+      }
 
       toast({
         title: "Processing Started",
-        description: `Started processing ${propertyNames.length} properties. This may take a few minutes.`,
+        description: "Your properties are being processed. You'll receive an email when complete.",
       })
-
-      // Reset form
-      setFile(null)
-      setExtractedNames([])
-      setParentAddress("")
-      setShowNamesList(false)
 
       // Redirect to dashboard
       router.push("/dashboard")
@@ -217,7 +205,7 @@ export default function UploadPage() {
       console.error("Error processing properties:", error)
       toast({
         title: "Processing Failed",
-        description: error.message || "Failed to process properties",
+        description: error instanceof Error ? error.message : "Failed to start processing",
         variant: "destructive",
       })
     } finally {
@@ -232,158 +220,178 @@ export default function UploadPage() {
         <div className="space-y-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Upload Property Image</h1>
-            <p className="mt-2 text-gray-600">Upload an image to extract property names and enrich contact data</p>
+            <p className="mt-2 text-gray-600">
+              Upload an image containing property names to extract and enrich contact information
+            </p>
           </div>
 
-          {/* File Upload */}
+          {/* Image Upload */}
           <Card>
             <CardHeader>
-              <CardTitle>Step 1: Upload Image</CardTitle>
-              <CardDescription>Select an image file containing property names or community listings</CardDescription>
+              <CardTitle className="flex items-center space-x-2">
+                <ImageIcon className="h-5 w-5" />
+                <span>Step 1: Upload Image</span>
+              </CardTitle>
+              <CardDescription>
+                Select an image file (JPEG or PNG) containing property or community names
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 hover:border-gray-400 transition-colors">
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <div className="text-center">
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">
-                      {file ? file.name : "Click to upload or drag and drop"}
-                    </p>
-                    <p className="text-xs text-gray-500">PNG, JPG, GIF up to 10MB</p>
+                <div className="flex items-center space-x-4">
+                  <div className="flex-1">
+                    <Label htmlFor="image-upload" className="block text-sm font-medium text-gray-700 mb-2">
+                      Choose Image File
+                    </Label>
+                    <Input
+                      id="image-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="cursor-pointer"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">PNG, JPG up to 10MB</p>
                   </div>
+                  <Button onClick={handleExtractNames} disabled={!selectedFile || isExtracting} variant="outline">
+                    {isExtracting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="mr-2 h-4 w-4" />
+                        Extract Names
+                      </>
+                    )}
+                  </Button>
                 </div>
 
-                <Button onClick={handleExtractNames} disabled={!file || isExtracting} className="w-full">
-                  {isExtracting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting Names...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Extract Property Names
-                    </>
-                  )}
-                </Button>
+                {imagePreview && (
+                  <div className="space-y-2">
+                    <Label>Image Preview</Label>
+                    <div className="border rounded-lg p-4 bg-white">
+                      <img
+                        src={imagePreview || "/placeholder.svg"}
+                        alt="Upload preview"
+                        className="max-w-full h-auto max-h-96 mx-auto rounded shadow-sm"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
           {/* Extracted Names */}
-          {showNamesList && (
+          {extractedProperties.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  Step 2: Review & Edit Property Names
-                  <Button onClick={handleAddName} size="sm" variant="outline">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <CardTitle>Step 2: Review & Edit Property Names</CardTitle>
+                    <CardDescription>
+                      Review the extracted property names. You can edit or remove any entries before processing.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={handleAddProperty} size="sm" variant="outline">
                     <Plus className="mr-2 h-4 w-4" />
                     Add Property
                   </Button>
-                </CardTitle>
-                <CardDescription>
-                  Review the extracted property names. You can edit or delete them as needed.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="max-h-96 overflow-y-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Property Name</TableHead>
-                        <TableHead className="w-32">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {extractedNames.map((community) => (
-                        <TableRow key={community.id}>
-                          <TableCell>
-                            {editingId === community.id ? (
-                              <div className="flex space-x-2">
-                                <Input
-                                  value={editingName}
-                                  onChange={(e) => setEditingName(e.target.value)}
-                                  className="flex-1"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") handleSaveEdit()
-                                    if (e.key === "Escape") handleCancelEdit()
-                                  }}
-                                  autoFocus
-                                />
-                                <Button onClick={handleSaveEdit} size="sm">
-                                  Save
-                                </Button>
-                                <Button onClick={handleCancelEdit} size="sm" variant="outline">
-                                  Cancel
-                                </Button>
-                              </div>
-                            ) : (
-                              <span className="font-medium">{community.name}</span>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {editingId !== community.id && (
-                              <div className="flex space-x-2">
-                                <Button
-                                  onClick={() => handleEditName(community.id, community.name)}
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button onClick={() => handleDeleteName(community.id)} size="sm" variant="outline">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Parent Address Input */}
-          {showNamesList && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Step 3: Enter Parent Address</CardTitle>
-                <CardDescription>Provide the general location or parent address for these properties</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="parentAddress">Parent Address</Label>
+                  <div className="rounded-md border max-h-96 overflow-y-auto">
+                    <Table>
+                      <TableHeader className="sticky top-0 bg-white z-10">
+                        <TableRow>
+                          <TableHead>Property Name</TableHead>
+                          <TableHead className="w-32">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {extractedProperties.map((property) => (
+                          <TableRow key={property.id}>
+                            <TableCell>
+                              {editingId === property.id ? (
+                                <Input
+                                  value={editingValue}
+                                  onChange={(e) => setEditingValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveEdit(property.id)
+                                    if (e.key === "Escape") handleCancelEdit()
+                                  }}
+                                  className="w-full"
+                                  autoFocus
+                                />
+                              ) : (
+                                <span className="font-medium">{property.name}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                {editingId === property.id ? (
+                                  <>
+                                    <Button size="sm" variant="outline" onClick={() => handleSaveEdit(property.id)}>
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={handleCancelEdit}>
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleEditProperty(property.id, property.name)}
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleRemoveProperty(property.id)}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="parent-address">Parent Address</Label>
                     <Input
-                      id="parentAddress"
+                      id="parent-address"
+                      placeholder="e.g., Palm Beach County, Florida"
                       value={parentAddress}
                       onChange={(e) => setParentAddress(e.target.value)}
-                      placeholder="e.g., Miami, FL or 123 Main St, Miami, FL"
-                      className="mt-1"
                     />
+                    <p className="text-sm text-gray-500">
+                      Enter the general location (city, county, state) where these properties are located
+                    </p>
                   </div>
 
                   <Button
                     onClick={handleProcessProperties}
-                    disabled={isProcessing || extractedNames.length === 0 || !parentAddress.trim()}
+                    disabled={isProcessing || extractedProperties.length === 0 || !parentAddress.trim()}
                     className="w-full"
+                    size="lg"
                   >
                     {isProcessing ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing Properties...
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                        Starting Processing...
                       </>
                     ) : (
-                      `Process ${extractedNames.length} Properties`
+                      `Process ${extractedProperties.length} Properties`
                     )}
                   </Button>
                 </div>
