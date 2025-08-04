@@ -1,10 +1,14 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+if (!process.env.GEMINI_API_KEY) {
+  throw new Error("GEMINI_API_KEY environment variable is required")
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: string): Promise<string[]> {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
     const prompt = `
       Analyze this image and extract all residential community names, subdivision names, or neighborhood names that you can see.
@@ -31,34 +35,61 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
     const response = await result.response
     const text = response.text()
 
+    console.log("Gemini response:", text)
+
     // Try to parse the JSON response
     try {
-      const cleanedText = text.replace(/```json\n?|\n?```/g, "").trim()
+      // Clean up the response text
+      let cleanedText = text.trim()
+
+      // Remove markdown code blocks if present
+      cleanedText = cleanedText.replace(/```json\n?|\n?```/g, "")
+      cleanedText = cleanedText.replace(/```\n?|\n?```/g, "")
+
+      // Try to find JSON array in the text
+      const jsonMatch = cleanedText.match(/\[.*\]/s)
+      if (jsonMatch) {
+        cleanedText = jsonMatch[0]
+      }
+
       const names = JSON.parse(cleanedText)
 
       if (Array.isArray(names)) {
-        return names.filter((name) => typeof name === "string" && name.trim().length > 0)
+        return names.filter((name) => typeof name === "string" && name.trim().length > 0).map((name) => name.trim())
+      } else {
+        throw new Error("Response is not an array")
       }
     } catch (parseError) {
       console.error("Failed to parse JSON response:", parseError)
-      // Fallback: try to extract names from text
-      const lines = text.split("\n").filter((line) => line.trim().length > 0)
-      return lines.map((line) => line.replace(/^[-*•]\s*/, "").trim()).filter(Boolean)
-    }
+      console.log("Raw response:", text)
 
-    return []
+      // Fallback: try to extract names from text
+      const lines = text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => line.replace(/^[-*•]\s*/, ""))
+        .map((line) => line.replace(/^\d+\.\s*/, ""))
+        .filter((line) => line.length > 0 && !line.includes("JSON") && !line.includes("array"))
+
+      if (lines.length > 0) {
+        return lines
+      }
+
+      throw new Error("Could not extract property names from the response")
+    }
   } catch (error) {
     console.error("Error extracting names from image:", error)
-    throw new Error("Failed to extract community names from image")
+    throw new Error(`Failed to extract property names: ${error instanceof Error ? error.message : "Unknown error"}`)
   }
 }
 
-export async function enrichCommunityData(communityName: string, parentAddress: string) {
+export async function enrichPropertyData(propertyName: string, parentAddress: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
 
     const prompt = `
-      You are a real estate research assistant. Find detailed HOA or property management contact information for the residential community "${communityName}" located in or near "${parentAddress}".
+      You are a real estate research assistant. Find detailed HOA or property management contact information for the residential community "${propertyName}" located in or near "${parentAddress}".
 
       Search for:
       1. Management company name
@@ -93,7 +124,10 @@ export async function enrichCommunityData(communityName: string, parentAddress: 
     const text = response.text()
 
     try {
-      const cleanedText = text.replace(/```json\n?|\n?```/g, "").trim()
+      let cleanedText = text.trim()
+      cleanedText = cleanedText.replace(/```json\n?|\n?```/g, "")
+      cleanedText = cleanedText.replace(/```\n?|\n?```/g, "")
+
       const data = JSON.parse(cleanedText)
 
       // Ensure all required fields exist
@@ -110,6 +144,8 @@ export async function enrichCommunityData(communityName: string, parentAddress: 
       }
     } catch (parseError) {
       console.error("Failed to parse enrichment response:", parseError)
+      console.log("Raw response:", text)
+
       // Return empty structure if parsing fails
       return {
         management_company: null,
@@ -124,7 +160,7 @@ export async function enrichCommunityData(communityName: string, parentAddress: 
       }
     }
   } catch (error) {
-    console.error("Error enriching community data:", error)
-    throw new Error(`Failed to enrich data for community: ${communityName}`)
+    console.error("Error enriching property data:", error)
+    throw new Error(`Failed to enrich data for property: ${propertyName}`)
   }
 }

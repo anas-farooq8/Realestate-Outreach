@@ -1,6 +1,5 @@
 export interface Property {
   id: string
-  user_id: string
   community_name: string
   management_company?: string
   decision_maker_name?: string
@@ -18,13 +17,12 @@ export interface Property {
 
 export interface Upload {
   id: string
-  user_id: string
   filename: string
   parent_address: string
   extracted_names?: string[]
   status: "processing" | "completed" | "failed"
-  total_communities: number
-  processed_communities: number
+  total_properties: number
+  processed_properties: number
   created_at: string
   updated_at: string
 }

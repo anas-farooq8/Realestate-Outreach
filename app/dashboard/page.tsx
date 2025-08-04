@@ -38,11 +38,7 @@ export default function DashboardPage() {
         throw new Error("User not authenticated")
       }
 
-      const { data, error } = await supabase
-        .from("properties")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
+      const { data, error } = await supabase.from("properties").select("*").order("created_at", { ascending: false })
 
       if (error) {
         throw error

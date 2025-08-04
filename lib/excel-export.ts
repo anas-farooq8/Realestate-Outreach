@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx"
 import type { Property } from "./types"
 
-export function exportToExcel(properties: Property[], filename = "properties.xlsx"): void {
+export function exportToExcel(properties: Property[], filename: string) {
   // Prepare data for Excel export
   const excelData = properties.map((property) => ({
     "Community Name": property.community_name,
@@ -22,26 +22,15 @@ export function exportToExcel(properties: Property[], filename = "properties.xls
   const workbook = XLSX.utils.book_new()
   const worksheet = XLSX.utils.json_to_sheet(excelData)
 
-  // Set column widths
-  const columnWidths = [
-    { wch: 25 }, // Community Name
-    { wch: 25 }, // Management Company
-    { wch: 20 }, // Decision Maker
-    { wch: 30 }, // Email
-    { wch: 15 }, // Phone
-    { wch: 30 }, // Street Address
-    { wch: 15 }, // City
-    { wch: 15 }, // County
-    { wch: 10 }, // State
-    { wch: 10 }, // Zip Code
-    { wch: 25 }, // Parent Address
-    { wch: 12 }, // Created Date
-  ]
+  // Auto-size columns
+  const columnWidths = Object.keys(excelData[0] || {}).map((key) => ({
+    wch: Math.max(key.length, 15),
+  }))
   worksheet["!cols"] = columnWidths
 
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(workbook, worksheet, "Properties")
 
-  // Generate Excel file and trigger download
+  // Save file
   XLSX.writeFile(workbook, filename)
 }
