@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -19,17 +20,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Edit2, Trash2, RefreshCw, Eye } from "lucide-react"
+import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react"
 import type { EmailTemplate } from "@/lib/types"
+
+type FilterType = "all" | "active" | "inactive"
 
 export default function EmailTemplatesPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<EmailTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [filter, setFilter] = useState<FilterType>("all")
+  const [searchTerm, setSearchTerm] = useState("")
   const [formData, setFormData] = useState({
     template_name: "",
     subject: "",
@@ -42,7 +58,41 @@ export default function EmailTemplatesPage() {
   const { toast } = useToast()
   const supabase = createClient()
 
-  const fetchTemplates = async () => {
+  const ITEMS_PER_PAGE = 20
+
+  // Memoized filtered and paginated data
+  const filteredTemplates = useMemo(() => {
+    let filtered = templates
+
+    // Apply status filter
+    if (filter === "active") {
+      filtered = filtered.filter((template) => template.is_active)
+    } else if (filter === "inactive") {
+      filtered = filtered.filter((template) => !template.is_active)
+    }
+
+    // Apply search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase()
+      filtered = filtered.filter(
+        (template) =>
+          template.template_name.toLowerCase().includes(search) ||
+          template.subject?.toLowerCase().includes(search) ||
+          template.hook?.toLowerCase().includes(search),
+      )
+    }
+
+    return filtered
+  }, [templates, filter, searchTerm])
+
+  const paginatedTemplates = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
+    return filteredTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredTemplates, currentPage])
+
+  const totalPages = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE)
+
+  const fetchTemplates = useCallback(async () => {
     try {
       setLoading(true)
       const { data, error } = await supabase
@@ -51,7 +101,8 @@ export default function EmailTemplatesPage() {
         .order("created_at", { ascending: false })
 
       if (error) {
-        throw error
+        console.error("Supabase error:", error)
+        throw new Error(error.message)
       }
 
       setTemplates(data || [])
@@ -59,13 +110,13 @@ export default function EmailTemplatesPage() {
       console.error("Error fetching templates:", error)
       toast({
         title: "Error",
-        description: "Failed to load email templates",
+        description: error instanceof Error ? error.message : "Failed to load email templates",
         variant: "destructive",
       })
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase, toast])
 
   const resetForm = () => {
     setFormData({
@@ -112,6 +163,8 @@ export default function EmailTemplatesPage() {
         return
       }
 
+      setSaving(true)
+
       const templateData = {
         template_name: formData.template_name.trim(),
         subject: formData.subject.trim() || null,
@@ -122,37 +175,50 @@ export default function EmailTemplatesPage() {
         updated_at: new Date().toISOString(),
       }
 
+      let result
       if (editingTemplate) {
         // Update existing template
-        const { error } = await supabase.from("email_templates").update(templateData).eq("id", editingTemplate.id)
-
-        if (error) throw error
-
-        toast({
-          title: "Template Updated",
-          description: "Email template has been updated successfully",
-        })
+        result = await supabase.from("email_templates").update(templateData).eq("id", editingTemplate.id).select()
       } else {
         // Create new template
-        const { error } = await supabase.from("email_templates").insert([templateData])
-
-        if (error) throw error
-
-        toast({
-          title: "Template Created",
-          description: "Email template has been created successfully",
-        })
+        result = await supabase
+          .from("email_templates")
+          .insert([
+            {
+              ...templateData,
+              created_at: new Date().toISOString(),
+            },
+          ])
+          .select()
       }
 
+      if (result.error) {
+        console.error("Supabase error:", result.error)
+        throw new Error(result.error.message)
+      }
+
+      toast({
+        title: editingTemplate ? "Template Updated" : "Template Created",
+        description: `Email template has been ${editingTemplate ? "updated" : "created"} successfully`,
+      })
+
       handleCloseDialog()
-      fetchTemplates()
+
+      // Optimistically update the local state instead of refetching all data
+      if (editingTemplate && result.data?.[0]) {
+        setTemplates((prev) => prev.map((t) => (t.id === editingTemplate.id ? result.data[0] : t)))
+      } else if (result.data?.[0]) {
+        setTemplates((prev) => [result.data[0], ...prev])
+      }
     } catch (error) {
       console.error("Error saving template:", error)
       toast({
         title: "Error",
-        description: "Failed to save email template",
+        description: error instanceof Error ? error.message : "Failed to save email template",
         variant: "destructive",
       })
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -160,19 +226,30 @@ export default function EmailTemplatesPage() {
     try {
       const { error } = await supabase.from("email_templates").delete().eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Supabase error:", error)
+        throw new Error(error.message)
+      }
 
       toast({
         title: "Template Deleted",
         description: "Email template has been deleted successfully",
       })
 
-      fetchTemplates()
+      // Optimistically update local state
+      setTemplates((prev) => prev.filter((t) => t.id !== id))
+
+      // Adjust current page if necessary
+      const newFilteredCount = filteredTemplates.length - 1
+      const newTotalPages = Math.ceil(newFilteredCount / ITEMS_PER_PAGE)
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages)
+      }
     } catch (error) {
       console.error("Error deleting template:", error)
       toast({
         title: "Error",
-        description: "Failed to delete email template",
+        description: error instanceof Error ? error.message : "Failed to delete email template",
         variant: "destructive",
       })
     }
@@ -180,24 +257,34 @@ export default function EmailTemplatesPage() {
 
   const handleToggleActive = async (id: number, isActive: boolean) => {
     try {
-      const { error } = await supabase
+      const { error, data } = await supabase
         .from("email_templates")
-        .update({ is_active: isActive, updated_at: new Date().toISOString() })
+        .update({
+          is_active: isActive,
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", id)
+        .select()
 
-      if (error) throw error
+      if (error) {
+        console.error("Supabase error:", error)
+        throw new Error(error.message)
+      }
 
       toast({
         title: isActive ? "Template Activated" : "Template Deactivated",
         description: `Email template has been ${isActive ? "activated" : "deactivated"}`,
       })
 
-      fetchTemplates()
+      // Optimistically update local state
+      if (data?.[0]) {
+        setTemplates((prev) => prev.map((t) => (t.id === id ? data[0] : t)))
+      }
     } catch (error) {
       console.error("Error toggling template status:", error)
       toast({
         title: "Error",
-        description: "Failed to update template status",
+        description: error instanceof Error ? error.message : "Failed to update template status",
         variant: "destructive",
       })
     }
@@ -208,9 +295,84 @@ export default function EmailTemplatesPage() {
     setIsPreviewOpen(true)
   }
 
+  const handleFilterChange = (newFilter: FilterType) => {
+    setFilter(newFilter)
+    setCurrentPage(1) // Reset to first page when filter changes
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value)
+    setCurrentPage(1) // Reset to first page when search changes
+  }
+
+  const renderPaginationItems = () => {
+    const items = []
+    const maxVisiblePages = 5
+
+    if (totalPages <= maxVisiblePages) {
+      for (let i = 1; i <= totalPages; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+              {i}
+            </PaginationLink>
+          </PaginationItem>,
+        )
+      }
+    } else {
+      // Always show first page
+      items.push(
+        <PaginationItem key={1}>
+          <PaginationLink onClick={() => setCurrentPage(1)} isActive={currentPage === 1} className="cursor-pointer">
+            1
+          </PaginationLink>
+        </PaginationItem>,
+      )
+
+      if (currentPage > 3) {
+        items.push(<PaginationEllipsis key="ellipsis1" />)
+      }
+
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1)
+      const end = Math.min(totalPages - 1, currentPage + 1)
+
+      for (let i = start; i <= end; i++) {
+        items.push(
+          <PaginationItem key={i}>
+            <PaginationLink onClick={() => setCurrentPage(i)} isActive={currentPage === i} className="cursor-pointer">
+              {i}
+            </PaginationLink>
+          </PaginationItem>,
+        )
+      }
+
+      if (currentPage < totalPages - 2) {
+        items.push(<PaginationEllipsis key="ellipsis2" />)
+      }
+
+      // Always show last page
+      if (totalPages > 1) {
+        items.push(
+          <PaginationItem key={totalPages}>
+            <PaginationLink
+              onClick={() => setCurrentPage(totalPages)}
+              isActive={currentPage === totalPages}
+              className="cursor-pointer"
+            >
+              {totalPages}
+            </PaginationLink>
+          </PaginationItem>,
+        )
+      }
+    }
+
+    return items
+  }
+
   useEffect(() => {
     fetchTemplates()
-  }, [])
+  }, [fetchTemplates])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -234,10 +396,47 @@ export default function EmailTemplatesPage() {
             </div>
           </div>
 
+          {/* Filters and Search */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <Label htmlFor="filter">Filter:</Label>
+                    <Select value={filter} onValueChange={handleFilterChange}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="search">Search:</Label>
+                    <Input
+                      id="search"
+                      placeholder="Search templates..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="w-64"
+                    />
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">
+                  Showing {paginatedTemplates.length} of {filteredTemplates.length} templates
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Templates Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Email Templates ({templates.length})</CardTitle>
+              <CardTitle>Email Templates ({filteredTemplates.length})</CardTitle>
               <CardDescription>Manage your email templates for outreach campaigns</CardDescription>
             </CardHeader>
             <CardContent>
@@ -245,65 +444,98 @@ export default function EmailTemplatesPage() {
                 <div className="flex justify-center py-8">
                   <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
-              ) : templates.length === 0 ? (
+              ) : filteredTemplates.length === 0 ? (
                 <div className="text-center py-8">
-                  <p className="text-gray-500">No email templates found</p>
-                  <Button onClick={() => handleOpenDialog()} className="mt-4">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Your First Template
-                  </Button>
+                  <p className="text-gray-500">
+                    {searchTerm || filter !== "all"
+                      ? "No templates match your current filters"
+                      : "No email templates found"}
+                  </p>
+                  {!searchTerm && filter === "all" && (
+                    <Button onClick={() => handleOpenDialog()} className="mt-4">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Your First Template
+                    </Button>
+                  )}
                 </div>
               ) : (
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Template Name</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead>Hook</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Updated</TableHead>
-                        <TableHead className="w-32">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {templates.map((template) => (
-                        <TableRow key={template.id}>
-                          <TableCell className="font-medium max-w-xs truncate">{template.template_name}</TableCell>
-                          <TableCell className="max-w-xs truncate">{template.subject || "—"}</TableCell>
-                          <TableCell className="max-w-xs truncate">{template.hook || "—"}</TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={template.is_active}
-                                onCheckedChange={(checked) => handleToggleActive(template.id, checked)}
-                              />
-                              <Badge variant={template.is_active ? "default" : "secondary"}>
-                                {template.is_active ? "Active" : "Inactive"}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell>{new Date(template.created_at).toLocaleDateString()}</TableCell>
-                          <TableCell>{new Date(template.updated_at).toLocaleDateString()}</TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button onClick={() => handlePreview(template)} size="sm" variant="outline">
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button onClick={() => handleOpenDialog(template)} size="sm" variant="outline">
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button onClick={() => handleDeleteTemplate(template.id)} size="sm" variant="outline">
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                <>
+                  <div className="rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Template Name</TableHead>
+                          <TableHead>Subject</TableHead>
+                          <TableHead>Hook</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead>Updated</TableHead>
+                          <TableHead className="w-32">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedTemplates.map((template) => (
+                          <TableRow key={template.id}>
+                            <TableCell className="font-medium max-w-xs truncate">{template.template_name}</TableCell>
+                            <TableCell className="max-w-xs truncate">{template.subject || "—"}</TableCell>
+                            <TableCell className="max-w-xs truncate">{template.hook || "—"}</TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={template.is_active}
+                                  onCheckedChange={(checked) => handleToggleActive(template.id, checked)}
+                                />
+                                <Badge variant={template.is_active ? "default" : "secondary"}>
+                                  {template.is_active ? "Active" : "Inactive"}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>{new Date(template.created_at).toLocaleDateString()}</TableCell>
+                            <TableCell>{new Date(template.updated_at).toLocaleDateString()}</TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button onClick={() => handlePreview(template)} size="sm" variant="outline">
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button onClick={() => handleOpenDialog(template)} size="sm" variant="outline">
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button onClick={() => handleDeleteTemplate(template.id)} size="sm" variant="outline">
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Pagination */}
+                  {totalPages > 1 && (
+                    <div className="mt-6 flex justify-center">
+                      <Pagination>
+                        <PaginationContent>
+                          <PaginationItem>
+                            <PaginationPrevious
+                              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                              className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                            />
+                          </PaginationItem>
+                          {renderPaginationItems()}
+                          <PaginationItem>
+                            <PaginationNext
+                              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                              className={
+                                currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"
+                              }
+                            />
+                          </PaginationItem>
+                        </PaginationContent>
+                      </Pagination>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -390,10 +622,21 @@ export default function EmailTemplatesPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={handleCloseDialog}>
+            <Button variant="outline" onClick={handleCloseDialog} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSaveTemplate}>{editingTemplate ? "Update Template" : "Create Template"}</Button>
+            <Button onClick={handleSaveTemplate} disabled={saving}>
+              {saving ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  {editingTemplate ? "Updating..." : "Creating..."}
+                </>
+              ) : editingTemplate ? (
+                "Update Template"
+              ) : (
+                "Create Template"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
