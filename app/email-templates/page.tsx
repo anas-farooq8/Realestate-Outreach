@@ -44,6 +44,8 @@ import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react"
 import type { EmailTemplate } from "@/lib/types"
 
 type FilterType = "all" | "active" | "inactive"
+type SortField = "created_at" | "updated_at"
+type SortOrder = "asc" | "desc"
 
 export default function EmailTemplatesPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
@@ -58,6 +60,8 @@ export default function EmailTemplatesPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [filter, setFilter] = useState<FilterType>("all")
   const [searchTerm, setSearchTerm] = useState("")
+  const [sortField, setSortField] = useState<SortField>("created_at")
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [formData, setFormData] = useState({
     template_name: "",
     subject: "",
@@ -72,8 +76,8 @@ export default function EmailTemplatesPage() {
 
   const ITEMS_PER_PAGE = 20
 
-  // Memoized filtered and paginated data
-  const filteredTemplates = useMemo(() => {
+  // Memoized filtered, sorted, and paginated data
+  const filteredAndSortedTemplates = useMemo(() => {
     let filtered = templates
 
     // Apply status filter
@@ -94,15 +98,27 @@ export default function EmailTemplatesPage() {
       )
     }
 
-    return filtered
-  }, [templates, filter, searchTerm])
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      const aValue = new Date(a[sortField]).getTime()
+      const bValue = new Date(b[sortField]).getTime()
+
+      if (sortOrder === "asc") {
+        return aValue - bValue
+      } else {
+        return bValue - aValue
+      }
+    })
+
+    return sorted
+  }, [templates, filter, searchTerm, sortField, sortOrder])
 
   const paginatedTemplates = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE
-    return filteredTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE)
-  }, [filteredTemplates, currentPage])
+    return filteredAndSortedTemplates.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [filteredAndSortedTemplates, currentPage])
 
-  const totalPages = Math.ceil(filteredTemplates.length / ITEMS_PER_PAGE)
+  const totalPages = Math.ceil(filteredAndSortedTemplates.length / ITEMS_PER_PAGE)
 
   const fetchTemplates = useCallback(async () => {
     try {
@@ -259,7 +275,7 @@ export default function EmailTemplatesPage() {
       setTemplates((prev) => prev.filter((t) => t.id !== templateToDelete.id))
 
       // Adjust current page if necessary
-      const newFilteredCount = filteredTemplates.length - 1
+      const newFilteredCount = filteredAndSortedTemplates.length - 1
       const newTotalPages = Math.ceil(newFilteredCount / ITEMS_PER_PAGE)
       if (currentPage > newTotalPages && newTotalPages > 0) {
         setCurrentPage(newTotalPages)
@@ -330,6 +346,18 @@ export default function EmailTemplatesPage() {
   const handleSearchChange = (value: string) => {
     setSearchTerm(value)
     setCurrentPage(1) // Reset to first page when search changes
+  }
+
+  const handleSortChange = (field: SortField) => {
+    if (sortField === field) {
+      // Toggle order if same field
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      // Set new field with default desc order
+      setSortField(field)
+      setSortOrder("desc")
+    }
+    setCurrentPage(1) // Reset to first page when sort changes
   }
 
   const renderPaginationItems = () => {
@@ -423,38 +451,65 @@ export default function EmailTemplatesPage() {
             </div>
           </div>
 
-          {/* Filters and Search */}
+          {/* Filters, Search, and Sort */}
           <Card>
             <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <div className="flex items-center space-x-2">
-                    <Filter className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="filter">Filter:</Label>
-                    <Select value={filter} onValueChange={handleFilterChange}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                    <div className="flex items-center space-x-2">
+                      <Filter className="h-4 w-4 text-gray-500" />
+                      <Label htmlFor="filter">Filter:</Label>
+                      <Select value={filter} onValueChange={handleFilterChange}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="search">Search:</Label>
+                      <Input
+                        id="search"
+                        placeholder="Search templates..."
+                        value={searchTerm}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        className="w-64"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Label htmlFor="search">Search:</Label>
-                    <Input
-                      id="search"
-                      placeholder="Search templates..."
-                      value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      className="w-64"
-                    />
+                  <div className="text-sm text-gray-500">
+                    Showing {paginatedTemplates.length} of {filteredAndSortedTemplates.length} templates
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  Showing {paginatedTemplates.length} of {filteredTemplates.length} templates
+
+                {/* Sort Controls */}
+                <div className="flex items-center space-x-4">
+                  <Label className="text-sm font-medium">Sort by:</Label>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant={sortField === "created_at" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSortChange("created_at")}
+                      className="flex items-center space-x-1"
+                    >
+                      <span>Created</span>
+                      {sortField === "created_at" && <span className="text-xs">{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                    </Button>
+                    <Button
+                      variant={sortField === "updated_at" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSortChange("updated_at")}
+                      className="flex items-center space-x-1"
+                    >
+                      <span>Updated</span>
+                      {sortField === "updated_at" && <span className="text-xs">{sortOrder === "asc" ? "↑" : "↓"}</span>}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -463,7 +518,7 @@ export default function EmailTemplatesPage() {
           {/* Templates Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Email Templates ({filteredTemplates.length})</CardTitle>
+              <CardTitle>Email Templates ({filteredAndSortedTemplates.length})</CardTitle>
               <CardDescription>Manage your email templates for outreach campaigns</CardDescription>
             </CardHeader>
             <CardContent>
@@ -471,7 +526,7 @@ export default function EmailTemplatesPage() {
                 <div className="flex justify-center py-8">
                   <RefreshCw className="h-8 w-8 animate-spin" />
                 </div>
-              ) : filteredTemplates.length === 0 ? (
+              ) : filteredAndSortedTemplates.length === 0 ? (
                 <div className="text-center py-8">
                   <p className="text-gray-500">
                     {searchTerm || filter !== "all"
