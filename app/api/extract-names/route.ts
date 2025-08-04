@@ -7,33 +7,28 @@ export async function POST(request: NextRequest) {
     const image = formData.get("image") as File
 
     if (!image) {
-      return NextResponse.json({ error: "No image provided" }, { status: 400 })
+      return NextResponse.json({ error: "No image file provided" }, { status: 400 })
     }
 
     // Validate file type
     if (!image.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Invalid file type. Please upload an image." }, { status: 400 })
+      return NextResponse.json({ error: "File must be an image" }, { status: 400 })
     }
 
-    // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024 // 10MB
-    if (image.size > maxSize) {
-      return NextResponse.json({ error: "File too large. Please upload an image smaller than 10MB." }, { status: 400 })
+    // Validate file size (max 10MB)
+    if (image.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: "Image file too large (max 10MB)" }, { status: 400 })
     }
 
-    // Convert to buffer
-    const bytes = await image.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    // Convert image to buffer
+    const imageBuffer = Buffer.from(await image.arrayBuffer())
 
-    // Extract names using Gemini
-    const names = await extractNamesFromImage(buffer, image.type)
+    // Extract names using Gemini Vision
+    const names = await extractNamesFromImage(imageBuffer, image.type)
 
     return NextResponse.json({ names })
   } catch (error) {
     console.error("Error in extract-names API:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to extract names" },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: error.message || "Failed to extract names from image" }, { status: 500 })
   }
 }

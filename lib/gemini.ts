@@ -1,36 +1,37 @@
 import { GoogleGenerativeAI } from "@google/generative-ai"
 
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable is required")
-}
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+// Rate limiting
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: string): Promise<string[]> {
   try {
+    console.log("Starting name extraction from image...")
+
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" })
 
     const prompt = `
-      Analyze this image and extract all residential community names, subdivision names, or neighborhood names that you can see.
+      Analyze this image and extract ALL property/community names visible in the image.
       
       IMPORTANT RULES:
-      1. Extract ONLY the property/community name (e.g., "CHASEWOOD", "SUNSET VILLAGE", "PALM GARDENS")
-      2. Do NOT include any additional text like "Estates", "Community", "Subdivision" unless it's part of the actual name
-      3. Remove duplicates - each name should appear only once
-      4. Return names in UPPERCASE format
-      5. Ignore street names, city names, or other non-community identifiers
-      6. Clean up any formatting issues
+      1. Extract ONLY the property/community name (e.g., "CHASEWOOD", "SUNSET VILLAGE")
+      2. Remove duplicates - each name should appear only once
+      3. Return names in UPPERCASE format
+      4. Do not include addresses, just the property names
+      5. If you see apartment complex names, HOA community names, or subdivision names, include them
+      6. Look for any text that represents a property or community name
       
-      Return the results as a JSON array of strings, like this:
-      ["CHASEWOOD", "SUNSET VILLAGE", "PALM GARDENS"]
+      Return the names as a JSON array of strings.
+      Example: ["CHASEWOOD", "SUNSET VILLAGE", "OAKWOOD ESTATES"]
       
-      Return only the JSON array, no other text.
+      If no property names are found, return an empty array: []
     `
 
     const imagePart = {
       inlineData: {
         data: imageBuffer.toString("base64"),
-        mimeType,
+        mimeType: mimeType,
       },
     }
 
@@ -38,132 +39,131 @@ export async function extractNamesFromImage(imageBuffer: Buffer, mimeType: strin
     const response = await result.response
     const text = response.text()
 
-    console.log("Gemini response:", text)
+    console.log("Raw Gemini response:", text)
 
-    // Try to parse the JSON response
+    // Clean and parse the response
+    let cleanedText = text.trim()
+
+    // Remove markdown code blocks if present
+    cleanedText = cleanedText.replace(/```json\s*|\s*```/g, "")
+    cleanedText = cleanedText.replace(/```\s*|\s*```/g, "")
+
+    // Try to find JSON array in the response
+    const jsonMatch = cleanedText.match(/\[[\s\S]*\]/)
+    if (jsonMatch) {
+      cleanedText = jsonMatch[0]
+    }
+
     try {
-      // Clean up the response text
-      let cleanedText = text.trim()
-
-      // Remove markdown code blocks if present
-      cleanedText = cleanedText.replace(/```json\n?|\n?```/g, "")
-      cleanedText = cleanedText.replace(/```\n?|\n?```/g, "")
-
-      // Try to find JSON array in the text
-      const jsonMatch = cleanedText.match(/\[.*\]/s)
-      if (jsonMatch) {
-        cleanedText = jsonMatch[0]
-      }
-
       const names = JSON.parse(cleanedText)
-
       if (Array.isArray(names)) {
         // Remove duplicates and clean names
-        const uniqueNames = [...new Set(names.filter((name) => typeof name === "string" && name.trim().length > 0))]
-        return uniqueNames.map((name) => name.trim().toUpperCase())
-      } else {
-        throw new Error("Response is not an array")
+        const uniqueNames = [...new Set(names.map((name) => String(name).trim().toUpperCase()))].filter(
+          (name) => name.length > 0,
+        )
+
+        console.log("Extracted names:", uniqueNames)
+        return uniqueNames
       }
     } catch (parseError) {
-      console.error("Failed to parse JSON response:", parseError)
-      console.log("Raw response:", text)
+      console.error("JSON parsing failed, trying to extract names manually:", parseError)
 
-      // Fallback: try to extract names from text
-      const lines = text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .map((line) => line.replace(/^[-*•]\s*/, ""))
-        .map((line) => line.replace(/^\d+\.\s*/, ""))
-        .filter((line) => line.length > 0 && !line.includes("JSON") && !line.includes("array"))
+      // Fallback: try to extract names manually
+      const lines = cleanedText.split("\n")
+      const extractedNames: string[] = []
 
-      if (lines.length > 0) {
-        // Remove duplicates and clean names
-        const uniqueNames = [...new Set(lines)]
-        return uniqueNames.map((name) => name.trim().toUpperCase())
+      for (const line of lines) {
+        const trimmed = line
+          .trim()
+          .replace(/["[\],]/g, "")
+          .trim()
+        if (trimmed && trimmed.length > 2 && !trimmed.toLowerCase().includes("no property")) {
+          extractedNames.push(trimmed.toUpperCase())
+        }
       }
 
-      throw new Error("Could not extract property names from the response")
+      if (extractedNames.length > 0) {
+        const uniqueNames = [...new Set(extractedNames)]
+        console.log("Manually extracted names:", uniqueNames)
+        return uniqueNames
+      }
     }
+
+    console.log("No names could be extracted from the response")
+    return []
   } catch (error) {
     console.error("Error extracting names from image:", error)
-    throw new Error(`Failed to extract property names: ${error instanceof Error ? error.message : "Unknown error"}`)
+    throw new Error("Failed to extract names from image")
   }
 }
 
 export async function enrichPropertyData(propertyName: string, parentAddress: string) {
   try {
+    console.log(`Enriching data for property: ${propertyName}`)
+
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" })
 
     const prompt = `
-      You are a real estate research assistant. Find detailed HOA or property management contact information for the residential community "${propertyName}" located in or near "${parentAddress}".
+      You are a real estate data enrichment expert. For the property "${propertyName}" located near "${parentAddress}", provide the following information in JSON format:
 
-      Search for:
-      1. Management company name
-      2. Decision maker (Property Manager, HOA President, Community Manager, etc.)
-      3. Contact email address
-      4. Phone number
-      5. Full address (street, city, county, state, zip code)
+      IMPORTANT FORMATTING RULES:
+      1. For state: Use full state name (e.g., "Florida", not "FL")
+      2. For county: Use only county name without "County" word (e.g., "Miami-Dade", not "Miami-Dade County")
+      3. If any data is not found or uncertain, omit that field entirely from the JSON
+      4. Do not use "unknown", "N/A", or similar placeholder values
+      5. Only include fields where you have confident data
 
-      Return the information as a JSON object with this exact structure:
+      Required JSON structure (only include fields with actual data):
       {
-        "management_company": "Company Name",
-        "decision_maker_name": "Full Name",
-        "email": "email@example.com",
-        "phone": "phone number",
-        "street_address": "street address",
-        "city": "city name",
+        "management_company": "Company name if found",
+        "decision_maker_name": "Name if found",
+        "email": "email@domain.com if found",
+        "phone": "phone number if found",
+        "street": "street address if found",
+        "city": "city name if found",
         "county": "county name only (no 'County' word)",
-        "state": "full state name (e.g., Florida, not FL)",
-        "zip_code": "zip code"
+        "state": "full state name",
+        "zip_code": "zip code if found"
       }
 
-      IMPORTANT RULES:
-      1. For state: Use full state name (e.g., "Florida", "California", "Texas")
-      2. For county: Use only the county name without the word "County" (e.g., "Palm Beach", not "Palm Beach County")
-      3. If any field cannot be found, simply omit that field from the JSON response
-      4. Ensure email addresses are valid format
-      5. Include area codes for phone numbers
-      6. Be as accurate as possible with the information
-      7. Return only the JSON object, no other text
+      Focus on finding:
+      - HOA management companies or property management companies
+      - Decision makers (HOA presidents, property managers, etc.)
+      - Contact information (emails, phone numbers)
+      - Accurate location data
+
+      Return only the JSON object, no additional text.
     `
+
+    // Add delay to respect rate limits
+    await delay(10000) // 10 seconds between requests
 
     const result = await model.generateContent(prompt)
     const response = await result.response
     const text = response.text()
 
+    console.log(`Raw response for ${propertyName}:`, text)
+
+    // Clean and parse the response
+    let cleanedText = text.trim()
+    cleanedText = cleanedText.replace(/```json\s*|\s*```/g, "")
+    cleanedText = cleanedText.replace(/```\s*|\s*```/g, "")
+
     try {
-      let cleanedText = text.trim()
-      cleanedText = cleanedText.replace(/```json\n?|\n?```/g, "")
-      cleanedText = cleanedText.replace(/```\n?|\n?```/g, "")
-
-      const data = JSON.parse(cleanedText)
-
-      // Only return fields that have actual values
-      const result: any = {}
-
-      if (data.management_company) result.management_company = data.management_company
-      if (data.decision_maker_name) result.decision_maker_name = data.decision_maker_name
-      if (data.email) result.email = data.email
-      if (data.phone) result.phone = data.phone
-      if (data.street_address) result.street_address = data.street_address
-      if (data.city) result.city = data.city
-      if (data.county) result.county = data.county
-      if (data.state) result.state = data.state
-      if (data.zip_code) result.zip_code = data.zip_code
-
-      return result
+      const enrichedData = JSON.parse(cleanedText)
+      console.log(`Enriched data for ${propertyName}:`, enrichedData)
+      return enrichedData
     } catch (parseError) {
-      console.error("Failed to parse enrichment response:", parseError)
-      console.log("Raw response:", text)
+      console.error(`JSON parsing failed for ${propertyName}:`, parseError)
+      console.log("Raw text that failed to parse:", cleanedText)
 
-      // Return empty object if parsing fails
+      // Return empty object instead of throwing error
       return {}
     }
   } catch (error) {
     console.error("Error enriching property data:", error)
 
-    // Return empty object instead of throwing error to prevent processing failure
+    // Return empty object instead of throwing error to continue processing
     return {}
   }
 }

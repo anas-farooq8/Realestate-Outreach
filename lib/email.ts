@@ -10,25 +10,19 @@ const transporter = nodemailer.createTransport({
   },
 })
 
-export async function sendCompletionEmail(userEmail: string, totalProperties: number, processedProperties: number) {
+export async function sendEmail(to: string, subject: string, html: string) {
   try {
-    const mailOptions = {
+    const info = await transporter.sendMail({
       from: process.env.EMAIL_USER || "TBMMoutreach@gmail.com",
-      to: userEmail,
-      subject: "Property Processing Complete",
-      html: `
-        <h2>Property Processing Complete</h2>
-        <p>Your property processing has been completed.</p>
-        <p><strong>Total Properties:</strong> ${totalProperties}</p>
-        <p><strong>Successfully Processed:</strong> ${processedProperties}</p>
-        <p><strong>Success Rate:</strong> ${Math.round((processedProperties / totalProperties) * 100)}%</p>
-        <p>You can now view your properties in the dashboard.</p>
-      `,
-    }
+      to,
+      subject,
+      html,
+    })
 
-    await transporter.sendMail(mailOptions)
-    console.log("Completion email sent successfully")
+    console.log("Email sent:", info.messageId)
+    return { success: true, messageId: info.messageId }
   } catch (error) {
-    console.error("Error sending completion email:", error)
+    console.error("Error sending email:", error)
+    return { success: false, error: error.message }
   }
 }
