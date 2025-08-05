@@ -3,6 +3,7 @@
 import type React from "react";
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +24,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { toast } = useToast();
+  const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -75,19 +78,64 @@ export default function LoginPage() {
         title: "Login Successful",
         description: "Welcome back!",
       });
+
+      // Use window.location.replace to clear browser history
+      // This prevents users from navigating back to login/home pages
+      window.location.replace("/dashboard");
     }
   };
 
   // Check if user is already logged in
   useEffect(() => {
     const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      // User check without redirect - handle elsewhere if needed
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          // User is already authenticated, redirect to dashboard
+          // Use window.location.replace to clear history
+          window.location.replace("/dashboard");
+          return;
+        }
+      } catch (error) {
+        console.error("Auth check error:", error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
     };
+
     checkUser();
-  }, [supabase.auth]);
+
+    // Listen for auth state changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session?.user) {
+        // Redirect to dashboard when user signs in
+        // Use window.location.replace to clear history
+        window.location.replace("/dashboard");
+      } else if (event === "SIGNED_OUT") {
+        // User signed out, they can stay on login page
+        setIsCheckingAuth(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth, router]);
+
+  // Show loading while checking authentication status
+  if (isCheckingAuth) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <p className="text-sm text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
