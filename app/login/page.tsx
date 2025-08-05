@@ -3,7 +3,6 @@
 import type React from "react";
 
 import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,46 +24,70 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
-  const router = useRouter();
   const supabase = createClient();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
 
-      if (error) {
-        throw error;
+    if (error) {
+      let message = "An unexpected error occurred";
+
+      // Handle specific Supabase auth errors without throwing
+      switch (error.message) {
+        case "Invalid login credentials":
+          message =
+            "Invalid email or password. Please check your credentials and try again.";
+          break;
+        case "Email not confirmed":
+          message =
+            "Please check your email and click the confirmation link before signing in.";
+          break;
+        case "Too many requests":
+          message =
+            "Too many login attempts. Please wait a moment before trying again.";
+          break;
+        case "User not found":
+          message = "No account found with this email address.";
+          break;
+        default:
+          message = error.message;
       }
-
-      toast({
-        title: "Login Successful",
-        description: "Welcome back!",
-      });
-
-      // Keep loading state during redirect to prevent flash
-      // The navbar auth state change will handle the redirect
-    } catch (error) {
-      console.error("Login error:", error);
-
-      const message =
-        error instanceof Error ? error.message : "Invalid email or password";
 
       toast({
         title: "Login Failed",
         description: message,
         variant: "destructive",
       });
-      // Only reset loading on error
+
       setIsLoading(false);
+      return;
     }
-    // Don't reset loading on success - let redirect handle it
+
+    // Success case
+    if (data.user) {
+      toast({
+        title: "Login Successful",
+        description: "Welcome back!",
+      });
+    }
   };
+
+  // Check if user is already logged in
+  useEffect(() => {
+    const checkUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      // User check without redirect - handle elsewhere if needed
+    };
+    checkUser();
+  }, [supabase.auth]);
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
@@ -104,6 +127,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="mt-1"
+                  disabled={isLoading}
                 />
               </div>
 
@@ -119,6 +143,8 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pr-10"
+                    disabled={isLoading}
+                    minLength={6}
                   />
                   <Button
                     type="button"
@@ -126,6 +152,7 @@ export default function LoginPage() {
                     size="sm"
                     className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
                     onClick={() => setShowPassword(!showPassword)}
+                    disabled={isLoading}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4 text-gray-400" />
