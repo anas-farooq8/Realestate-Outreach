@@ -40,7 +40,8 @@ export async function middleware(request: NextRequest) {
 
     // Define protected routes
     const protectedRoutes = ["/dashboard", "/upload", "/email-templates"];
-    const authRoutes = ["/login", "/signup"];
+    const authRoutes = ["/login", "/signup", "/"];
+
     const isProtectedRoute = protectedRoutes.some((route) =>
       pathname.startsWith(route)
     );
@@ -50,7 +51,7 @@ export async function middleware(request: NextRequest) {
     if ((error || !user) && isProtectedRoute) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      url.searchParams.set("redirectTo", pathname);
+      // Removed the redirectTo parameter - no query params added
       return NextResponse.redirect(url);
     }
 
