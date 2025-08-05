@@ -16,7 +16,7 @@ export interface Property {
   street: string | null;
 }
 
-export interface ExtractedCommunity {
+export interface ExtractedProperty {
   id: string;
   name: string;
   editable: boolean;
@@ -32,35 +32,4 @@ export interface EmailTemplate {
   is_active: boolean; // boolean - NOT NULL DEFAULT true
   created_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
   updated_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
-}
-
-export interface EnrichedPropertyData {
-  street_address?: string;
-  city?: string;
-  county?: string;
-  state?: string;
-  zip_code?: string;
-  decision_maker_name?: string;
-  email?: string;
-  phone?: string;
-  management_company?: string;
-}
-
-export interface User {
-  id: string;
-  email: string;
-  created_at: string;
-}
-
-export interface ProcessingJob {
-  id: string;
-  user_id: string;
-  filename: string;
-  parent_address: string;
-  property_names: string[];
-  status: "pending" | "processing" | "completed" | "failed";
-  total_properties: number;
-  processed_properties: number;
-  created_at: string;
-  updated_at: string;
 }

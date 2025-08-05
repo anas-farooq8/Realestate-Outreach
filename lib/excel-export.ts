@@ -1,36 +1,54 @@
-import * as XLSX from "xlsx";
+import * as ExcelJS from "exceljs";
 import type { Property } from "./types";
 
-export function exportToExcel(properties: Property[], filename: string) {
-  // Prepare data for export
-  const exportData = properties.map((property) => ({
-    "Property Name": property.property_address || "",
-    Street: property.street || "",
-    City: property.city || "",
-    County: property.county || "",
-    State: property.state || "",
-    "Zip Code": property.zip_code || "",
-    "Decision Maker": property.decision_maker_name || "",
-    Email: property.decision_maker_email || "",
-    Phone: property.decision_maker_phone || "",
-    "HOA/Management Company": property.hoa_or_management_company || "",
-    "Created At": new Date(property.created_at).toLocaleDateString(),
-    "Updated At": new Date(property.updated_at).toLocaleDateString(),
-  }));
-
+export async function exportToExcel(properties: Property[], filename: string) {
   // Create workbook and worksheet
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet("Properties");
 
-  // Auto-size columns
-  const columnWidths = Object.keys(exportData[0] || {}).map((key) => ({
-    wch: Math.max(key.length, 15),
-  }));
-  worksheet["!cols"] = columnWidths;
+  // Define columns with headers
+  worksheet.columns = [
+    { header: "Property Name", key: "propertyName", width: 25 },
+    { header: "Street", key: "street", width: 25 },
+    { header: "City", key: "city", width: 15 },
+    { header: "County", key: "county", width: 15 },
+    { header: "State", key: "state", width: 10 },
+    { header: "Zip Code", key: "zipCode", width: 12 },
+    { header: "Decision Maker", key: "decisionMaker", width: 20 },
+    { header: "Email", key: "email", width: 25 },
+    { header: "Phone", key: "phone", width: 15 },
+    { header: "HOA/Management Company", key: "hoaManagement", width: 25 },
+    { header: "Created At", key: "createdAt", width: 15 },
+    { header: "Updated At", key: "updatedAt", width: 15 },
+  ];
 
-  // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Properties");
+  // Add data rows
+  properties.forEach((property) => {
+    worksheet.addRow({
+      propertyName: property.property_address || "",
+      street: property.street || "",
+      city: property.city || "",
+      county: property.county || "",
+      state: property.state || "",
+      zipCode: property.zip_code || "",
+      decisionMaker: property.decision_maker_name || "",
+      email: property.decision_maker_email || "",
+      phone: property.decision_maker_phone || "",
+      hoaManagement: property.hoa_or_management_company || "",
+      createdAt: new Date(property.created_at).toLocaleDateString(),
+      updatedAt: new Date(property.updated_at).toLocaleDateString(),
+    });
+  });
 
-  // Save file
-  XLSX.writeFile(workbook, filename);
+  // Style the header row
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true };
+  headerRow.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFE0E0E0" },
+  };
+
+  // Write file
+  await workbook.xlsx.writeFile(filename);
 }

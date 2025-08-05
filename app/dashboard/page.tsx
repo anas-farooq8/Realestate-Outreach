@@ -167,7 +167,7 @@ export default function DashboardPage() {
     setCurrentPage(1);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filteredProperties.length === 0) {
       toast({
         title: "No Data",
@@ -177,15 +177,24 @@ export default function DashboardPage() {
       return;
     }
 
-    const filename = `properties_${
-      new Date().toISOString().split("T")[0]
-    }.xlsx`;
-    exportToExcel(filteredProperties, filename);
+    try {
+      const filename = `properties_${
+        new Date().toISOString().split("T")[0]
+      }.xlsx`;
+      await exportToExcel(filteredProperties, filename);
 
-    toast({
-      title: "Export Successful",
-      description: `Exported ${filteredProperties.length} properties to ${filename}`,
-    });
+      toast({
+        title: "Export Successful",
+        description: `Exported ${filteredProperties.length} properties to ${filename}`,
+      });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({
+        title: "Export Failed",
+        description: "Failed to export properties. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePageChange = (page: number) => {

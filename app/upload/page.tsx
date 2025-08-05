@@ -23,13 +23,13 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react";
-import type { ExtractedCommunity } from "@/lib/types";
+import type { ExtractedProperty } from "@/lib/types";
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extractedProperties, setExtractedProperties] = useState<
-    ExtractedCommunity[]
+    ExtractedProperty[]
   >([]);
   const [parentAddress, setParentAddress] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
@@ -175,7 +175,7 @@ export default function UploadPage() {
   };
 
   const handleAddProperty = () => {
-    const newProperty: ExtractedCommunity = {
+    const newProperty: ExtractedProperty = {
       id: `property-${Date.now()}`,
       name: "New Property",
       editable: false,
