@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,16 +67,17 @@ type SortField = "created_at" | "updated_at";
 type SortOrder = "asc" | "desc";
 
 export default function EmailTemplatesPage() {
-  // Use cached data instead of local state and manual fetching
   const {
     data: templates,
     loading,
     error,
     refresh: refreshTemplates,
-    invalidateCache,
   } = useCachedEmailTemplates();
 
+  const [localTemplates, setLocalTemplates] = useState<EmailTemplate[]>([]);
+  const [isLocalSynced, setIsLocalSynced] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -107,9 +108,29 @@ export default function EmailTemplatesPage() {
 
   const ITEMS_PER_PAGE = 20;
 
+  // Sync local templates with cached data when it changes
+  useEffect(() => {
+    if (templates.length > 0) {
+      setLocalTemplates(templates);
+      setIsLocalSynced(true);
+    } else if (templates.length === 0 && !loading) {
+      // Empty result from cache (not loading)
+      setLocalTemplates([]);
+      setIsLocalSynced(true);
+    }
+  }, [templates, loading]);
+
+  // Use local state for immediate UI updates, fallback to cached data
+  const displayTemplates = isLocalSynced ? localTemplates : templates;
+
+  // Show loading during initial load, cache retrieval, or refresh
+  // If we're not synced and have no cached data yet, or if actively loading/refreshing
+  const isShowingLoading =
+    loading || refreshing || (!isLocalSynced && templates.length === 0);
+
   // Memoized filtered, sorted, and paginated data
   const filteredAndSortedTemplates = useMemo(() => {
-    let filtered = templates;
+    let filtered = displayTemplates;
 
     // Apply status filter
     if (filter === "active") {
@@ -142,7 +163,7 @@ export default function EmailTemplatesPage() {
     });
 
     return sorted;
-  }, [templates, filter, searchTerm, sortField, sortOrder]);
+  }, [displayTemplates, filter, searchTerm, sortField, sortOrder]);
 
   const paginatedTemplates = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -190,6 +211,45 @@ export default function EmailTemplatesPage() {
     resetForm();
   };
 
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+      await refreshTemplates();
+      // Reset local sync to force reload from cache
+      setIsLocalSynced(false);
+      toast({
+        title: "Data Refreshed",
+        description: "Email templates have been refreshed successfully",
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh Failed",
+        description: "Failed to refresh email templates",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const updateLocalTemplate = (updatedTemplate: EmailTemplate) => {
+    setLocalTemplates((prev) =>
+      prev.map((template) =>
+        template.id === updatedTemplate.id ? updatedTemplate : template
+      )
+    );
+  };
+
+  const addLocalTemplate = (newTemplate: EmailTemplate) => {
+    setLocalTemplates((prev) => [newTemplate, ...prev]);
+  };
+
+  const removeLocalTemplate = (templateId: number) => {
+    setLocalTemplates((prev) =>
+      prev.filter((template) => template.id !== templateId)
+    );
+  };
+
   const handleSaveTemplate = async () => {
     try {
       if (!formData.template_name.trim() || !formData.body.trim()) {
@@ -221,8 +281,21 @@ export default function EmailTemplatesPage() {
           .update(templateData)
           .eq("id", editingTemplate.id)
           .select();
+
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
+
+        // Update local state with the actual returned data
+        const updatedTemplate = result.data[0] as EmailTemplate;
+        updateLocalTemplate(updatedTemplate);
+
+        toast({
+          title: "Template Updated",
+          description: "Email template has been updated successfully",
+        });
       } else {
-        // Create new template - let database auto-generate the ID
+        // Create new template
         result = await supabase
           .from("email_templates")
           .insert([
@@ -232,26 +305,22 @@ export default function EmailTemplatesPage() {
             },
           ])
           .select();
-      }
 
-      if (result.error) {
-        console.error("Supabase error:", result.error);
-        throw new Error(result.error.message);
-      }
+        if (result.error) {
+          throw new Error(result.error.message);
+        }
 
-      toast({
-        title: editingTemplate ? "Template Updated" : "Template Created",
-        description: `Email template has been ${
-          editingTemplate ? "updated" : "created"
-        } successfully`,
-      });
+        // Add to local state with the actual returned data
+        const newTemplate = result.data[0] as EmailTemplate;
+        addLocalTemplate(newTemplate);
+
+        toast({
+          title: "Template Created",
+          description: "Email template has been created successfully",
+        });
+      }
 
       handleCloseDialog();
-
-      // Invalidate cache to refresh data
-      invalidateCache();
-      // Refresh templates to get updated data
-      refreshTemplates();
     } catch (error) {
       console.error("Error saving template:", error);
       toast({
@@ -282,18 +351,16 @@ export default function EmailTemplatesPage() {
         .eq("id", templateToDelete.id);
 
       if (error) {
-        console.error("Supabase error:", error);
         throw new Error(error.message);
       }
+
+      // Remove from local state
+      removeLocalTemplate(templateToDelete.id);
 
       toast({
         title: "Template Deleted",
         description: "Email template has been deleted successfully",
       });
-
-      // Invalidate cache and refresh data
-      invalidateCache();
-      refreshTemplates();
 
       // Adjust current page if necessary
       const newFilteredCount = filteredAndSortedTemplates.length - 1;
@@ -322,19 +389,31 @@ export default function EmailTemplatesPage() {
     setTemplateToDelete(null);
   };
 
-  const handleToggleActive = async (id: number, isActive: boolean) => {
+  const handleToggleActive = async (
+    template: EmailTemplate,
+    isActive: boolean
+  ) => {
     try {
-      const { error, data } = await supabase
+      // Optimistically update local state first
+      const updatedTemplate = {
+        ...template,
+        is_active: isActive,
+        updated_at: new Date().toISOString(),
+      };
+      updateLocalTemplate(updatedTemplate);
+
+      // Then update database
+      const { error } = await supabase
         .from("email_templates")
         .update({
           is_active: isActive,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", id)
-        .select();
+        .eq("id", template.id);
 
       if (error) {
-        console.error("Supabase error:", error);
+        // Revert local state on error
+        updateLocalTemplate(template);
         throw new Error(error.message);
       }
 
@@ -344,10 +423,6 @@ export default function EmailTemplatesPage() {
           isActive ? "activated" : "deactivated"
         }`,
       });
-
-      // Invalidate cache and refresh data
-      invalidateCache();
-      refreshTemplates();
     } catch (error) {
       console.error("Error toggling template status:", error);
       toast({
@@ -368,24 +443,22 @@ export default function EmailTemplatesPage() {
 
   const handleFilterChange = (newFilter: FilterType) => {
     setFilter(newFilter);
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
   };
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
-    setCurrentPage(1); // Reset to first page when search changes
+    setCurrentPage(1);
   };
 
   const handleSortChange = (field: SortField) => {
     if (sortField === field) {
-      // Toggle order if same field
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
     } else {
-      // Set new field with default desc order
       setSortField(field);
       setSortOrder("desc");
     }
-    setCurrentPage(1); // Reset to first page when sort changes
+    setCurrentPage(1);
   };
 
   const renderPaginationItems = () => {
@@ -407,7 +480,6 @@ export default function EmailTemplatesPage() {
         );
       }
     } else {
-      // Always show first page
       items.push(
         <PaginationItem key={1}>
           <PaginationLink
@@ -424,7 +496,6 @@ export default function EmailTemplatesPage() {
         items.push(<PaginationEllipsis key="ellipsis1" />);
       }
 
-      // Show pages around current page
       const start = Math.max(2, currentPage - 1);
       const end = Math.min(totalPages - 1, currentPage + 1);
 
@@ -446,7 +517,6 @@ export default function EmailTemplatesPage() {
         items.push(<PaginationEllipsis key="ellipsis2" />);
       }
 
-      // Always show last page
       if (totalPages > 1) {
         items.push(
           <PaginationItem key={totalPages}>
@@ -479,12 +549,12 @@ export default function EmailTemplatesPage() {
           </div>
           <div className="flex space-x-4">
             <Button
-              onClick={refreshTemplates}
+              onClick={handleRefresh}
               variant="outline"
-              disabled={loading}
+              disabled={refreshing}
             >
               <RefreshCw
-                className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
+                className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>
@@ -532,7 +602,6 @@ export default function EmailTemplatesPage() {
                 </div>
               </div>
 
-              {/* Sort Controls */}
               <div className="flex items-center space-x-4">
                 <Label className="text-sm font-medium">Sort by:</Label>
                 <div className="flex space-x-2">
@@ -579,7 +648,7 @@ export default function EmailTemplatesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {loading ? (
+            {isShowingLoading ? (
               <div className="flex justify-center py-8">
                 <RefreshCw className="h-8 w-8 animate-spin" />
               </div>
@@ -629,7 +698,7 @@ export default function EmailTemplatesPage() {
                               <Switch
                                 checked={template.is_active}
                                 onCheckedChange={(checked) =>
-                                  handleToggleActive(template.id, checked)
+                                  handleToggleActive(template, checked)
                                 }
                               />
                               <Badge
@@ -678,7 +747,6 @@ export default function EmailTemplatesPage() {
                   </Table>
                 </div>
 
-                {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="mt-6 flex justify-center">
                     <Pagination>

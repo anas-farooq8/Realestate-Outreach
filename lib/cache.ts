@@ -25,31 +25,13 @@ class DataCache {
   private fetchingEmailTemplates = false;
 
   private isExpired(entry: CacheEntry<any> | null): boolean {
-    if (!entry) {
-      console.log("🔍 Cache entry does not exist");
-      return true;
-    }
-    const isExpired = Date.now() - entry.timestamp > this.CACHE_DURATION;
-    const ageInMinutes = Math.floor(
-      (Date.now() - entry.timestamp) / (1000 * 60)
-    );
-    console.log(`🔍 Cache age: ${ageInMinutes} minutes, expired: ${isExpired}`);
-    return isExpired;
+    if (!entry) return true;
+    return Date.now() - entry.timestamp > this.CACHE_DURATION;
   }
 
   private isSameUser(entry: CacheEntry<any> | null): boolean {
-    if (!entry || !this.currentUserId) {
-      console.log(
-        `🔍 User check failed - entry: ${!!entry}, currentUserId: ${!!this
-          .currentUserId}`
-      );
-      return false;
-    }
-    const isSame = entry.userId === this.currentUserId;
-    console.log(
-      `🔍 User check - cached userId: ${entry.userId}, current userId: ${this.currentUserId}, same: ${isSame}`
-    );
-    return isSame;
+    if (!entry || !this.currentUserId) return false;
+    return entry.userId === this.currentUserId;
   }
 
   async getCurrentUserId(): Promise<string | null> {
@@ -93,24 +75,17 @@ class DataCache {
 
       // Check if cache exists and is valid
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        console.log("✅ Returning cached properties data", {
-          dataLength: entry.data.length,
-          cacheAge: Math.floor((Date.now() - entry.timestamp) / (1000 * 60)),
-          userId: entry.userId,
-        });
         return entry.data;
       }
 
       // Prevent concurrent fetches
       if (this.fetchingProperties) {
-        console.log("⏳ Properties fetch already in progress, waiting...");
         // Wait for current fetch to complete
         await new Promise((resolve) => setTimeout(resolve, 100));
         return this.getProperties(); // Recursive call to check cache again
       }
 
       this.fetchingProperties = true;
-      console.log("🔄 Fetching fresh properties data from database...");
 
       // Fetch fresh data
       const { data, error } = await this.supabase
@@ -132,9 +107,6 @@ class DataCache {
       };
 
       this.fetchingProperties = false;
-      console.log(
-        `💾 Cached ${data?.length || 0} properties for user ${userId}`
-      );
       return data || [];
     } catch (error) {
       console.error("Error in getProperties:", error);
@@ -158,24 +130,17 @@ class DataCache {
 
       // Check if cache exists and is valid
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        console.log("✅ Returning cached email templates data", {
-          dataLength: entry.data.length,
-          cacheAge: Math.floor((Date.now() - entry.timestamp) / (1000 * 60)),
-          userId: entry.userId,
-        });
         return entry.data;
       }
 
       // Prevent concurrent fetches
       if (this.fetchingEmailTemplates) {
-        console.log("⏳ Email templates fetch already in progress, waiting...");
         // Wait for current fetch to complete
         await new Promise((resolve) => setTimeout(resolve, 100));
         return this.getEmailTemplates(); // Recursive call to check cache again
       }
 
       this.fetchingEmailTemplates = true;
-      console.log("🔄 Fetching fresh email templates data from database...");
 
       // Fetch fresh data
       const { data, error } = await this.supabase
@@ -197,9 +162,6 @@ class DataCache {
       };
 
       this.fetchingEmailTemplates = false;
-      console.log(
-        `💾 Cached ${data?.length || 0} email templates for user ${userId}`
-      );
       return data || [];
     } catch (error) {
       console.error("Error in getEmailTemplates:", error);
@@ -229,7 +191,6 @@ class DataCache {
   // Invalidate cache when data is modified
   invalidateProperties(): void {
     try {
-      console.log("🗑️ Invalidating properties cache");
       this.cache.properties = null;
     } catch (error) {
       console.error("Error invalidating properties cache:", error);
@@ -238,7 +199,6 @@ class DataCache {
 
   invalidateEmailTemplates(): void {
     try {
-      console.log("🗑️ Invalidating email templates cache");
       this.cache.emailTemplates = null;
     } catch (error) {
       console.error("Error invalidating email templates cache:", error);
@@ -255,7 +215,6 @@ class DataCache {
       this.currentUserId = null;
       this.fetchingProperties = false;
       this.fetchingEmailTemplates = false;
-      console.log("🧹 Cache cleared successfully - all data removed");
     } catch (error) {
       console.error("Error clearing cache:", error);
     }
@@ -264,7 +223,6 @@ class DataCache {
   // Force refresh data
   async refreshProperties(): Promise<Property[]> {
     try {
-      console.log("🔄 Force refreshing properties data...");
       this.invalidateProperties();
       return await this.getProperties();
     } catch (error) {
@@ -275,7 +233,6 @@ class DataCache {
 
   async refreshEmailTemplates(): Promise<EmailTemplate[]> {
     try {
-      console.log("🔄 Force refreshing email templates data...");
       this.invalidateEmailTemplates();
       return await this.getEmailTemplates();
     } catch (error) {
@@ -306,14 +263,6 @@ class DataCache {
     const entry = this.cache.properties;
     const isValid =
       entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    console.log(`📊 Properties cache valid: ${isValid}`, {
-      hasEntry: !!entry,
-      dataLength: entry?.data?.length || 0,
-      userId: entry?.userId,
-      timestamp: entry?.timestamp
-        ? new Date(entry.timestamp).toISOString()
-        : null,
-    });
     return isValid;
   }
 
@@ -321,14 +270,6 @@ class DataCache {
     const entry = this.cache.emailTemplates;
     const isValid =
       entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    console.log(`📊 Email templates cache valid: ${isValid}`, {
-      hasEntry: !!entry,
-      dataLength: entry?.data?.length || 0,
-      userId: entry?.userId,
-      timestamp: entry?.timestamp
-        ? new Date(entry.timestamp).toISOString()
-        : null,
-    });
     return isValid;
   }
 
