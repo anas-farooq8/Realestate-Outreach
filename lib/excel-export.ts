@@ -49,6 +49,25 @@ export async function exportToExcel(properties: Property[], filename: string) {
     fgColor: { argb: "FFE0E0E0" },
   };
 
-  // Write file
-  await workbook.xlsx.writeFile(filename);
+  // Generate buffer and download file (browser-compatible)
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  // Create blob and download link
+  const blob = new Blob([buffer], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+
+  // Create download link
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+
+  // Trigger download
+  document.body.appendChild(link);
+  link.click();
+
+  // Cleanup
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(url);
 }
