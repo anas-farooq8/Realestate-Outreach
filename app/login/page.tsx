@@ -2,8 +2,8 @@
 
 import type React from "react";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,8 @@ export default function LoginPage() {
         description: "Welcome back!",
       });
 
-      router.push("/dashboard");
+      // Keep loading state during redirect to prevent flash
+      // The navbar auth state change will handle the redirect
     } catch (error) {
       console.error("Login error:", error);
 
@@ -59,9 +60,10 @@ export default function LoginPage() {
         description: message,
         variant: "destructive",
       });
-    } finally {
+      // Only reset loading on error
       setIsLoading(false);
     }
+    // Don't reset loading on success - let redirect handle it
   };
 
   return (

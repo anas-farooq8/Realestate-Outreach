@@ -37,6 +37,8 @@ export function Navbar({ children }: NavbarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [hasRedirected, setHasRedirected] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -59,7 +61,7 @@ export function Navbar({ children }: NavbarProps) {
         } = await supabase.auth.getUser();
         setUser(user);
       } catch (error) {
-        console.error("Error initializing app:", error);
+        // Silently handle errors during initialization
         setUser(null);
       } finally {
         setIsLoading(false);
@@ -72,28 +74,67 @@ export function Navbar({ children }: NavbarProps) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(
+        "Auth event:",
+        event,
+        "User:",
+        session?.user?.email,
+        "Pathname:",
+        pathname
+      );
+
       if (event === "SIGNED_OUT") {
         setIsSigningOut(true);
         setUser(null);
-        // Clear cache immediately when signing out
-        try {
-          dataCache.clearAll();
-        } catch (error) {
-          console.error("Error clearing cache:", error);
+        setHasRedirected(false);
+        // Clear cache safely when signing out
+        dataCache.clearAllSafe();
+        // Force redirect to home page
+        window.location.href = "/";
+      } else if (event === "SIGNED_IN" && !hasRedirected) {
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+        setIsSigningOut(false);
+        // Handle redirects for authenticated users only on initial sign in
+        if (session?.user) {
+          const currentPath = window.location.pathname;
+          const searchParams = new URLSearchParams(window.location.search);
+          const redirectTo = searchParams.get("redirectTo");
+
+          if (
+            currentPath === "/login" ||
+            currentPath === "/signup" ||
+            currentPath === "/"
+          ) {
+            setHasRedirected(true);
+            setIsRedirecting(true);
+            const targetPath = redirectTo || "/dashboard";
+            router.replace(targetPath);
+            // Reset redirecting state after a short delay
+            setTimeout(() => setIsRedirecting(false), 1000);
+          }
         }
-        // Small delay to prevent flash, then redirect
-        setTimeout(() => {
-          setIsSigningOut(false);
-          router.push("/");
-        }, 100);
+      } else if (event === "TOKEN_REFRESHED") {
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+        setIsSigningOut(false);
+        // Don't redirect on token refresh
       } else {
         setUser(session?.user ?? null);
         setIsLoading(false);
+        setIsSigningOut(false);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase.auth, router]);
+  }, [supabase.auth]); // Removed router and pathname from dependencies
+
+  // Reset redirect flag when user navigates away from auth pages
+  useEffect(() => {
+    if (pathname !== "/login" && pathname !== "/signup" && pathname !== "/") {
+      setHasRedirected(false);
+    }
+  }, [pathname]);
 
   // Save sidebar state to localStorage
   useEffect(() => {
@@ -108,15 +149,13 @@ export function Navbar({ children }: NavbarProps) {
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true);
+      setHasRedirected(false);
       // Clear cache before signing out to prevent errors
-      dataCache.clearAll();
+      dataCache.clearAllSafe();
       await supabase.auth.signOut();
-      toast({
-        title: "Signed out successfully",
-        description: "You have been logged out of your account.",
-      });
+      // Don't show toast during transition as it might cause flash
+      // The auth state change will handle the redirect
     } catch (error) {
-      console.error("Error signing out:", error);
       setIsSigningOut(false);
       toast({
         title: "Error",
@@ -140,27 +179,40 @@ export function Navbar({ children }: NavbarProps) {
     return email?.split("@")[0] || "User";
   };
 
-  // Show loading spinner during initial load or sign out
-  if (isLoading || isSigningOut) {
+  // Show loading spinner during initial load, sign out, or redirecting
+  if (isLoading || isSigningOut || isRedirecting) {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
           <p className="text-sm text-gray-600">
-            {isSigningOut ? "Signing out..." : "Loading..."}
+            {isSigningOut
+              ? "Signing out..."
+              : isRedirecting
+              ? "Redirecting to dashboard..."
+              : "Loading..."}
           </p>
         </div>
       </div>
     );
   }
 
-  // Home page when not logged in - minimal navbar
-  if (
-    !user &&
-    (pathname === "/" || pathname === "/login" || pathname === "/signup")
-  ) {
+  // Public navbar for non-authenticated users or during sign-out
+  if (!user || isSigningOut) {
+    // Safety check: if user is authenticated but we're on auth pages, show loading
+    if (user && (pathname === "/login" || pathname === "/signup")) {
+      return (
+        <div className="flex h-screen bg-gray-50 items-center justify-center">
+          <div className="flex flex-col items-center space-y-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <p className="text-sm text-gray-600">Redirecting...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <>
+      <div className="min-h-screen bg-gray-50">
         <nav className="bg-white shadow-sm border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
@@ -192,17 +244,12 @@ export function Navbar({ children }: NavbarProps) {
             </div>
           </div>
         </nav>
-        {children}
-      </>
+        <main className="flex-1">{children}</main>
+      </div>
     );
   }
 
-  // Other pages when not logged in - no navbar
-  if (!user) {
-    return <>{children}</>;
-  }
-
-  // Logged in user - full navbar/sidebar
+  // Authenticated user layout with sidebar
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Desktop Sidebar */}
@@ -364,16 +411,16 @@ export function Navbar({ children }: NavbarProps) {
                   <DropdownMenuItem
                     onClick={handleSignOut}
                     className="cursor-pointer text-red-600"
+                    disabled={isSigningOut}
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    <span>Sign out</span>
+                    <span>{isSigningOut ? "Signing out..." : "Sign out"}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
-        </header>
-
+        </header>{" "}
         <main className="flex-1 overflow-auto">{children}</main>
       </div>
     </div>

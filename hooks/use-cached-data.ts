@@ -57,11 +57,21 @@ export function useCachedProperties(options: UseCachedDataOptions = {}) {
           setInitialLoad(false);
         }
       } catch (err) {
-        console.error("Error loading properties:", err);
-        if (mountedRef.current) {
-          setError(
-            err instanceof Error ? err.message : "Failed to load properties"
-          );
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load properties";
+
+        // Don't show errors for auth-related issues during sign out
+        if (
+          errorMessage.includes("Auth session missing") ||
+          errorMessage.includes("session not found") ||
+          errorMessage.includes("No session")
+        ) {
+          setData([]);
+          setError(null);
+        } else {
+          setError(errorMessage);
           if (data.length === 0) {
             setData([]);
           }
@@ -152,17 +162,26 @@ export function useCachedEmailTemplates(options: UseCachedDataOptions = {}) {
           setInitialLoad(false);
         }
       } catch (err) {
-        if (mountedRef.current) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load email templates"
-          );
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load email templates";
+
+        // Don't show errors for auth-related issues during sign out
+        if (
+          errorMessage.includes("Auth session missing") ||
+          errorMessage.includes("session not found") ||
+          errorMessage.includes("No session")
+        ) {
+          setData([]);
+          setError(null);
+        } else {
+          setError(errorMessage);
           if (data.length === 0) {
             setData([]);
           }
-          setInitialLoad(false);
         }
+        setInitialLoad(false);
       } finally {
         if (mountedRef.current) {
           setLoading(false);

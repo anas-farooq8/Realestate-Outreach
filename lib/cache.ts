@@ -36,21 +36,31 @@ class DataCache {
 
   async getCurrentUserId(): Promise<string | null> {
     try {
+      // Check if we have a session first
+      const {
+        data: { session },
+        error: sessionError,
+      } = await this.supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        this.currentUserId = null;
+        return null;
+      }
+
       const {
         data: { user },
         error,
       } = await this.supabase.auth.getUser();
 
-      if (error) {
-        console.error("Error getting user:", error);
+      if (error || !user) {
         this.currentUserId = null;
         return null;
       }
 
-      this.currentUserId = user?.id || null;
+      this.currentUserId = user.id;
       return this.currentUserId;
     } catch (error) {
-      console.error("Error in getCurrentUserId:", error);
+      // Silently handle auth errors during sign out
       this.currentUserId = null;
       return null;
     }
@@ -65,9 +75,7 @@ class DataCache {
     try {
       const userId = await this.getCurrentUserId();
       if (!userId) {
-        console.warn(
-          "User not authenticated, returning empty properties array"
-        );
+        // Silently return empty array when not authenticated
         return [];
       }
 
@@ -94,7 +102,6 @@ class DataCache {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Error fetching properties:", error);
         this.fetchingProperties = false;
         return entry?.data || []; // Return cached data if available
       }
@@ -311,7 +318,20 @@ class DataCache {
     if (!entry) return null;
     return Math.floor((Date.now() - entry.timestamp) / (1000 * 60));
   }
+
+  // Safe clear method that doesn't throw errors
+  clearAllSafe(): void {
+    try {
+      this.clearAll();
+    } catch (error) {
+      // Silently handle clear errors during sign out
+      this.cache = {
+        properties: null,
+        emailTemplates: null,
+      };
+      this.currentUserId = null;
+    }
+  }
 }
 
-// Export singleton instance
 export const dataCache = new DataCache();
