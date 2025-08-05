@@ -1,19 +1,19 @@
 export interface Property {
-  id: number;
-  property_address: string;
-  street?: string;
-  city?: string;
-  county?: string;
-  state?: string;
-  zip_code?: string;
-  decision_maker_name?: string;
-  decision_maker_email: string;
-  decision_maker_phone?: string;
-  hoa_or_management_company?: string;
-  suspend_until?: string;
-  opt_out_code?: string;
-  created_at: string;
-  updated_at: string;
+  id: string; // UUID - NOT NULL DEFAULT gen_random_uuid()
+  property_address: string | null;
+  zip_code: string | null;
+  city: string | null;
+  county: string | null;
+  state: string | null;
+  decision_maker_name: string | null;
+  decision_maker_email: string | null;
+  decision_maker_phone: string | null;
+  suspend_until: string; // date - NOT NULL DEFAULT CURRENT_DATE
+  created_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  updated_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  opt_out_code: string; // UUID - NOT NULL DEFAULT gen_random_uuid() UNIQUE
+  hoa_or_management_company: string | null;
+  street: string | null;
 }
 
 export interface ExtractedCommunity {
@@ -23,15 +23,15 @@ export interface ExtractedCommunity {
 }
 
 export interface EmailTemplate {
-  id: number;
-  template_name: string;
-  subject?: string;
-  hook?: string;
-  body: string;
-  signature?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
+  id: number; // integer - NOT NULL DEFAULT nextval('email_templates_id_seq'::regclass)
+  template_name: string; // text - NOT NULL
+  subject: string | null; // text
+  hook: string | null; // text
+  body: string; // text - NOT NULL
+  signature: string | null; // text
+  is_active: boolean; // boolean - NOT NULL DEFAULT true
+  created_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  updated_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
 }
 
 export interface EnrichedPropertyData {

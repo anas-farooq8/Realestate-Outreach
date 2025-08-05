@@ -2,7 +2,6 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -467,269 +466,258 @@ export default function EmailTemplatesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="space-y-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Email Templates
-              </h1>
-              <p className="mt-2 text-gray-600">
-                Create and manage email templates for your outreach campaigns
-              </p>
-            </div>
-            <div className="flex space-x-4">
-              <Button
-                onClick={refreshTemplates}
-                variant="outline"
-                disabled={loading}
-              >
-                <RefreshCw
-                  className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
-                />
-                Refresh
-              </Button>
-              <Button onClick={() => handleOpenDialog()}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Template
-              </Button>
-            </div>
+    <div className="p-6">
+      <div className="space-y-8">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Email Templates
+            </h1>
+            <p className="mt-2 text-gray-600">
+              Create and manage email templates for your outreach campaigns
+            </p>
           </div>
+          <div className="flex space-x-4">
+            <Button
+              onClick={refreshTemplates}
+              variant="outline"
+              disabled={loading}
+            >
+              <RefreshCw
+                className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </Button>
+            <Button onClick={() => handleOpenDialog()}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Template
+            </Button>
+          </div>
+        </div>
 
-          {/* Filters, Search, and Sort */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex flex-col gap-4">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                    <div className="flex items-center space-x-2">
-                      <Filter className="h-4 w-4 text-gray-500" />
-                      <Label htmlFor="filter">Filter:</Label>
-                      <Select value={filter} onValueChange={handleFilterChange}>
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All</SelectItem>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Label htmlFor="search">Search:</Label>
-                      <Input
-                        id="search"
-                        placeholder="Search templates..."
-                        value={searchTerm}
-                        onChange={(e) => handleSearchChange(e.target.value)}
-                        className="w-64"
-                      />
-                    </div>
+        {/* Filters, Search, and Sort */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <Label htmlFor="filter">Filter:</Label>
+                    <Select value={filter} onValueChange={handleFilterChange}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="text-sm text-gray-500">
-                    Showing {paginatedTemplates.length} of{" "}
-                    {filteredAndSortedTemplates.length} templates
+                  <div className="flex items-center space-x-2">
+                    <Label htmlFor="search">Search:</Label>
+                    <Input
+                      id="search"
+                      placeholder="Search templates..."
+                      value={searchTerm}
+                      onChange={(e) => handleSearchChange(e.target.value)}
+                      className="w-64"
+                    />
                   </div>
                 </div>
-
-                {/* Sort Controls */}
-                <div className="flex items-center space-x-4">
-                  <Label className="text-sm font-medium">Sort by:</Label>
-                  <div className="flex space-x-2">
-                    <Button
-                      variant={
-                        sortField === "created_at" ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() => handleSortChange("created_at")}
-                      className="flex items-center space-x-1"
-                    >
-                      <span>Created</span>
-                      {sortField === "created_at" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </Button>
-                    <Button
-                      variant={
-                        sortField === "updated_at" ? "default" : "outline"
-                      }
-                      size="sm"
-                      onClick={() => handleSortChange("updated_at")}
-                      className="flex items-center space-x-1"
-                    >
-                      <span>Updated</span>
-                      {sortField === "updated_at" && (
-                        <span className="text-xs">
-                          {sortOrder === "asc" ? "↑" : "↓"}
-                        </span>
-                      )}
-                    </Button>
-                  </div>
+                <div className="text-sm text-gray-500">
+                  Showing {paginatedTemplates.length} of{" "}
+                  {filteredAndSortedTemplates.length} templates
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Templates Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                Email Templates ({filteredAndSortedTemplates.length})
-              </CardTitle>
-              <CardDescription>
-                Manage your email templates for outreach campaigns
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="flex justify-center py-8">
-                  <RefreshCw className="h-8 w-8 animate-spin" />
+              {/* Sort Controls */}
+              <div className="flex items-center space-x-4">
+                <Label className="text-sm font-medium">Sort by:</Label>
+                <div className="flex space-x-2">
+                  <Button
+                    variant={sortField === "created_at" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSortChange("created_at")}
+                    className="flex items-center space-x-1"
+                  >
+                    <span>Created</span>
+                    {sortField === "created_at" && (
+                      <span className="text-xs">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </Button>
+                  <Button
+                    variant={sortField === "updated_at" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSortChange("updated_at")}
+                    className="flex items-center space-x-1"
+                  >
+                    <span>Updated</span>
+                    {sortField === "updated_at" && (
+                      <span className="text-xs">
+                        {sortOrder === "asc" ? "↑" : "↓"}
+                      </span>
+                    )}
+                  </Button>
                 </div>
-              ) : filteredAndSortedTemplates.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500">
-                    {searchTerm || filter !== "all"
-                      ? "No templates match your current filters"
-                      : "No email templates found"}
-                  </p>
-                  {!searchTerm && filter === "all" && (
-                    <Button onClick={() => handleOpenDialog()} className="mt-4">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Create Your First Template
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div className="rounded-md border overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Template Name</TableHead>
-                          <TableHead>Subject</TableHead>
-                          <TableHead>Hook</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
-                          <TableHead>Updated</TableHead>
-                          <TableHead className="w-32">Actions</TableHead>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Templates Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Email Templates ({filteredAndSortedTemplates.length})
+            </CardTitle>
+            <CardDescription>
+              Manage your email templates for outreach campaigns
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin" />
+              </div>
+            ) : filteredAndSortedTemplates.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">
+                  {searchTerm || filter !== "all"
+                    ? "No templates match your current filters"
+                    : "No email templates found"}
+                </p>
+                {!searchTerm && filter === "all" && (
+                  <Button onClick={() => handleOpenDialog()} className="mt-4">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Your First Template
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="rounded-md border overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Template Name</TableHead>
+                        <TableHead>Subject</TableHead>
+                        <TableHead>Hook</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Created</TableHead>
+                        <TableHead>Updated</TableHead>
+                        <TableHead className="w-32">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedTemplates.map((template) => (
+                        <TableRow key={template.id}>
+                          <TableCell className="font-medium max-w-xs truncate">
+                            {template.template_name}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {template.subject || "—"}
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate">
+                            {template.hook || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center space-x-2">
+                              <Switch
+                                checked={template.is_active}
+                                onCheckedChange={(checked) =>
+                                  handleToggleActive(template.id, checked)
+                                }
+                              />
+                              <Badge
+                                variant={
+                                  template.is_active ? "default" : "secondary"
+                                }
+                              >
+                                {template.is_active ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {new Date(template.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(template.updated_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button
+                                onClick={() => handlePreview(template)}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleOpenDialog(template)}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteClick(template)}
+                                size="sm"
+                                variant="outline"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedTemplates.map((template) => (
-                          <TableRow key={template.id}>
-                            <TableCell className="font-medium max-w-xs truncate">
-                              {template.template_name}
-                            </TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {template.subject || "—"}
-                            </TableCell>
-                            <TableCell className="max-w-xs truncate">
-                              {template.hook || "—"}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                <Switch
-                                  checked={template.is_active}
-                                  onCheckedChange={(checked) =>
-                                    handleToggleActive(template.id, checked)
-                                  }
-                                />
-                                <Badge
-                                  variant={
-                                    template.is_active ? "default" : "secondary"
-                                  }
-                                >
-                                  {template.is_active ? "Active" : "Inactive"}
-                                </Badge>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {new Date(
-                                template.created_at
-                              ).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              {new Date(
-                                template.updated_at
-                              ).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                <Button
-                                  onClick={() => handlePreview(template)}
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  onClick={() => handleOpenDialog(template)}
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  <Edit2 className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  onClick={() => handleDeleteClick(template)}
-                                  size="sm"
-                                  variant="outline"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
 
-                  {/* Pagination */}
-                  {totalPages > 1 && (
-                    <div className="mt-6 flex justify-center">
-                      <Pagination>
-                        <PaginationContent>
-                          <PaginationItem>
-                            <PaginationPrevious
-                              onClick={() =>
-                                setCurrentPage(Math.max(1, currentPage - 1))
-                              }
-                              className={
-                                currentPage === 1
-                                  ? "pointer-events-none opacity-50"
-                                  : "cursor-pointer"
-                              }
-                            />
-                          </PaginationItem>
-                          {renderPaginationItems()}
-                          <PaginationItem>
-                            <PaginationNext
-                              onClick={() =>
-                                setCurrentPage(
-                                  Math.min(totalPages, currentPage + 1)
-                                )
-                              }
-                              className={
-                                currentPage === totalPages
-                                  ? "pointer-events-none opacity-50"
-                                  : "cursor-pointer"
-                              }
-                            />
-                          </PaginationItem>
-                        </PaginationContent>
-                      </Pagination>
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="mt-6 flex justify-center">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() =>
+                              setCurrentPage(Math.max(1, currentPage - 1))
+                            }
+                            className={
+                              currentPage === 1
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                        {renderPaginationItems()}
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() =>
+                              setCurrentPage(
+                                Math.min(totalPages, currentPage + 1)
+                              )
+                            }
+                            className={
+                              currentPage === totalPages
+                                ? "pointer-events-none opacity-50"
+                                : "cursor-pointer"
+                            }
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Create/Edit Template Dialog */}
@@ -799,7 +787,7 @@ export default function EmailTemplatesPage() {
                 }
                 placeholder="Enter your email content here..."
                 className="mt-1"
-                rows={8}
+                rows={5}
               />
             </div>
 

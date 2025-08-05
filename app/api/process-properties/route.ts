@@ -22,38 +22,6 @@ async function processPropertiesAsync(
         parentAddress
       );
 
-      // Generate unique email if none found
-      const uniqueEmail =
-        enrichedData.email ||
-        `noemail+${Date.now()}+${Math.random()
-          .toString(36)
-          .substr(2, 9)}@example.com`;
-
-      // Check if email already exists
-      const { data: existingProperties, error: checkError } = await supabase
-        .from("properties")
-        .select("property_address, decision_maker_email")
-        .eq("decision_maker_email", uniqueEmail);
-
-      if (checkError) {
-        console.error("Error checking existing email:", checkError);
-        return false;
-      }
-
-      // If email exists, check if property name is the same
-      if (existingProperties && existingProperties.length > 0) {
-        const existingProperty = existingProperties.find(
-          (prop: any) => prop.property_address === propertyName
-        );
-
-        if (existingProperty) {
-          console.log(
-            `Skipping duplicate property: ${propertyName} with email: ${uniqueEmail}`
-          );
-          return false; // Skip this property as it already exists
-        }
-      }
-
       // Insert into properties table with correct schema
       const { error: insertError } = await supabase.from("properties").insert({
         property_address: propertyName, // Store only the property name
@@ -63,10 +31,9 @@ async function processPropertiesAsync(
         state: enrichedData.state,
         zip_code: enrichedData.zip_code,
         decision_maker_name: enrichedData.decision_maker_name,
-        decision_maker_email: uniqueEmail,
+        decision_maker_email: enrichedData.email, // Use email from enriched data or null
         decision_maker_phone: enrichedData.phone,
         hoa_or_management_company: enrichedData.management_company,
-        suspend_until: new Date().toISOString().split("T")[0], // Today's date
       });
 
       if (insertError) {

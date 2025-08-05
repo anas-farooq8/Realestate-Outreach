@@ -15,7 +15,9 @@ export async function extractNamesFromImage(
   try {
     console.log("Starting name extraction from image...");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = genAI.getGenerativeModel({
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+    });
 
     const prompt = `
       Analyze this image and extract ALL property/community names visible in the image.
@@ -113,7 +115,7 @@ export async function enrichPropertyData(
     console.log(`Enriching data for property: ${propertyName}`);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-2.5-flash",
+      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
       tools: [{ googleSearch: {} } as any],
     });
 

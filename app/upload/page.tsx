@@ -1,10 +1,8 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +22,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { dataCache } from "@/lib/cache";
 import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react";
 import type { ExtractedCommunity } from "@/lib/types";
 
@@ -45,38 +42,38 @@ export default function UploadPage() {
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (!file.type.startsWith("image/")) {
-        toast({
-          title: "Invalid File",
-          description: "Please select an image file (JPEG or PNG)",
-          variant: "destructive",
-        });
-        return;
-      }
+    if (!file) return;
 
-      if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: "File Too Large",
-          description: "Please select an image smaller than 10MB",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      setSelectedFile(file);
-
-      // Create preview
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setImagePreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-
-      // Reset previous extraction
-      setExtractedProperties([]);
-      setParentAddress("");
+    if (!file.type.startsWith("image/")) {
+      toast({
+        title: "Invalid File",
+        description: "Please select an image file (JPEG or PNG)",
+        variant: "destructive",
+      });
+      return;
     }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please select an image smaller than 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Reset previous extraction
+    setExtractedProperties([]);
+    setParentAddress("");
   };
 
   const handleExtractNames = async () => {
@@ -105,7 +102,7 @@ export default function UploadPage() {
         throw new Error(data.error || "Failed to extract names");
       }
 
-      if (data.names && data.names.length > 0) {
+      if (data.names?.length > 0) {
         const properties = data.names.map((name: string, index: number) => ({
           id: `property-${index}`,
           name: name.trim(),
@@ -158,17 +155,15 @@ export default function UploadPage() {
   };
 
   const handleCancelEdit = (propertyId?: string) => {
-    // If we're canceling edit on a newly added property, remove it
     if (propertyId) {
       const property = extractedProperties.find((p) => p.id === propertyId);
-      if (property && property.name === "New Property") {
+      if (property?.name === "New Property") {
         handleRemoveProperty(propertyId);
         setEditingId(null);
         setEditingValue("");
         return;
       }
     }
-
     setEditingId(null);
     setEditingValue("");
   };
@@ -236,11 +231,8 @@ export default function UploadPage() {
           "Your properties are being processed. You'll receive an email when complete.",
       });
 
-      // Invalidate properties cache since new data will be added
-      dataCache.invalidateProperties();
-
-      // Redirect to dashboard
-      router.push("/dashboard");
+      // Use window.location for more reliable navigation
+      window.location.href = "/dashboard";
     } catch (error) {
       console.error("Error processing properties:", error);
       toast({
@@ -255,241 +247,230 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navbar />
-      <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
-        <div className="space-y-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Upload Property Image
-            </h1>
-            <p className="mt-2 text-gray-600">
-              Upload an image containing property names to extract and enrich
-              contact information
-            </p>
-          </div>
+    <div className="p-6">
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Upload Property Image
+          </h1>
+          <p className="mt-2 text-gray-600">
+            Upload an image containing property names to extract and enrich
+            contact information
+          </p>
+        </div>
 
-          {/* Image Upload */}
+        {/* Image Upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <ImageIcon className="h-5 w-5" />
+              <span>Step 1: Upload Image</span>
+            </CardTitle>
+            <CardDescription>
+              Select an image file (JPEG or PNG) containing property or
+              community names
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center space-x-4">
+                <div className="flex-1">
+                  <Label
+                    htmlFor="image-upload"
+                    className="block text-sm font-medium text-gray-700 mb-2"
+                  >
+                    Choose Image File
+                  </Label>
+                  <Input
+                    id="image-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="w-full cursor-pointer"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    PNG, JPG up to 10MB
+                  </p>
+                </div>
+                <Button
+                  onClick={handleExtractNames}
+                  disabled={!selectedFile || isExtracting}
+                  variant="outline"
+                >
+                  {isExtracting ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="mr-2 h-4 w-4" />
+                      Extract Names
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {imagePreview && (
+                <div className="space-y-2">
+                  <Label>Image Preview</Label>
+                  <div className="border rounded-lg p-4 bg-white">
+                    <img
+                      src={imagePreview}
+                      alt="Upload preview"
+                      className="max-w-full h-auto max-h-96 mx-auto rounded shadow-sm"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Extracted Names */}
+        {extractedProperties.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <ImageIcon className="h-5 w-5" />
-                <span>Step 1: Upload Image</span>
-              </CardTitle>
-              <CardDescription>
-                Select an image file (JPEG or PNG) containing property or
-                community names
-              </CardDescription>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>Step 2: Review & Edit Property Names</CardTitle>
+                  <CardDescription>
+                    Review the extracted property names. You can edit or remove
+                    any entries before processing.
+                  </CardDescription>
+                </div>
+                <Button onClick={handleAddProperty} size="sm" variant="outline">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Property
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-center space-x-4">
-                  <div className="flex-1">
-                    <Label
-                      htmlFor="image-upload"
-                      className="block text-sm font-medium text-gray-700 mb-2"
-                    >
-                      Choose Image File
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="image-upload"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileSelect}
-                        className="w-full cursor-pointer"
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      PNG, JPG up to 10MB
-                    </p>
-                  </div>
-                  <Button
-                    onClick={handleExtractNames}
-                    disabled={!selectedFile || isExtracting}
-                    variant="outline"
-                  >
-                    {isExtracting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
-                        Extracting...
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        Extract Names
-                      </>
-                    )}
-                  </Button>
+                <div className="rounded-md border max-h-96 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 bg-white z-10">
+                      <TableRow>
+                        <TableHead>Property Name</TableHead>
+                        <TableHead className="w-32">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {extractedProperties.map((property) => (
+                        <TableRow key={property.id}>
+                          <TableCell>
+                            {editingId === property.id ? (
+                              <Input
+                                value={editingValue}
+                                onChange={(e) =>
+                                  setEditingValue(e.target.value)
+                                }
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter")
+                                    handleSaveEdit(property.id);
+                                  if (e.key === "Escape")
+                                    handleCancelEdit(property.id);
+                                }}
+                                className="w-full"
+                                autoFocus
+                              />
+                            ) : (
+                              <span className="font-medium">
+                                {property.name}
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              {editingId === property.id ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleSaveEdit(property.id)}
+                                  >
+                                    <Check className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleCancelEdit(property.id)
+                                    }
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              ) : (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleEditProperty(
+                                        property.id,
+                                        property.name
+                                      )
+                                    }
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() =>
+                                      handleRemoveProperty(property.id)
+                                    }
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
 
-                {imagePreview && (
-                  <div className="space-y-2">
-                    <Label>Image Preview</Label>
-                    <div className="border rounded-lg p-4 bg-white">
-                      <img
-                        src={imagePreview || "/placeholder.svg"}
-                        alt="Upload preview"
-                        className="max-w-full h-auto max-h-96 mx-auto rounded shadow-sm"
-                      />
-                    </div>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="parent-address">Parent Address</Label>
+                  <Input
+                    id="parent-address"
+                    placeholder="e.g., Palm Beach County, Florida"
+                    value={parentAddress}
+                    onChange={(e) => setParentAddress(e.target.value)}
+                  />
+                  <p className="text-sm text-gray-500">
+                    Enter the general location (city, county, state) where these
+                    properties are located
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleProcessProperties}
+                  disabled={
+                    isProcessing ||
+                    extractedProperties.length === 0 ||
+                    !parentAddress.trim()
+                  }
+                  className="w-full"
+                  size="lg"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Starting Processing...
+                    </>
+                  ) : (
+                    `Process ${extractedProperties.length} Properties`
+                  )}
+                </Button>
               </div>
             </CardContent>
           </Card>
-
-          {/* Extracted Names */}
-          {extractedProperties.length > 0 && (
-            <Card>
-              <CardHeader>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <CardTitle>Step 2: Review & Edit Property Names</CardTitle>
-                    <CardDescription>
-                      Review the extracted property names. You can edit or
-                      remove any entries before processing.
-                    </CardDescription>
-                  </div>
-                  <Button
-                    onClick={handleAddProperty}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Property
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="rounded-md border max-h-96 overflow-y-auto">
-                    <Table>
-                      <TableHeader className="sticky top-0 bg-white z-10">
-                        <TableRow>
-                          <TableHead>Property Name</TableHead>
-                          <TableHead className="w-32">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {extractedProperties.map((property) => (
-                          <TableRow key={property.id}>
-                            <TableCell>
-                              {editingId === property.id ? (
-                                <Input
-                                  value={editingValue}
-                                  onChange={(e) =>
-                                    setEditingValue(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter")
-                                      handleSaveEdit(property.id);
-                                    if (e.key === "Escape")
-                                      handleCancelEdit(property.id);
-                                  }}
-                                  className="w-full"
-                                  autoFocus
-                                />
-                              ) : (
-                                <span className="font-medium">
-                                  {property.name}
-                                </span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex space-x-2">
-                                {editingId === property.id ? (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleSaveEdit(property.id)
-                                      }
-                                    >
-                                      <Check className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleCancelEdit(property.id)
-                                      }
-                                    >
-                                      <X className="h-4 w-4" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleEditProperty(
-                                          property.id,
-                                          property.name
-                                        )
-                                      }
-                                    >
-                                      <Edit2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() =>
-                                        handleRemoveProperty(property.id)
-                                      }
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="parent-address">Parent Address</Label>
-                    <Input
-                      id="parent-address"
-                      placeholder="e.g., Palm Beach County, Florida"
-                      value={parentAddress}
-                      onChange={(e) => setParentAddress(e.target.value)}
-                    />
-                    <p className="text-sm text-gray-500">
-                      Enter the general location (city, county, state) where
-                      these properties are located
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={handleProcessProperties}
-                    disabled={
-                      isProcessing ||
-                      extractedProperties.length === 0 ||
-                      !parentAddress.trim()
-                    }
-                    className="w-full"
-                    size="lg"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        Starting Processing...
-                      </>
-                    ) : (
-                      `Process ${extractedProperties.length} Properties`
-                    )}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
