@@ -259,7 +259,7 @@ export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
   return useGenericCachedData<DashboardStats>(config, options);
 }
 
-// Hook for PDF proposals
+// Hook for PDF proposals with cache change listening
 export function useCachedPdfProposals(options: UseCachedDataOptions = {}) {
   const config = useMemo<CacheMethodConfig<PDFProposal[]>>(
     () => ({
@@ -272,5 +272,17 @@ export function useCachedPdfProposals(options: UseCachedDataOptions = {}) {
     []
   );
 
-  return useGenericCachedData<PDFProposal[]>(config, options);
+  const result = useGenericCachedData<PDFProposal[]>(config, options);
+
+  // Listen to cache changes for real-time updates
+  useEffect(() => {
+    const unsubscribe = dataCache.addCacheChangeListener(() => {
+      // Force refetch when cache changes (for uploads/deletes)
+      result.refetch(false); // false = don't force refresh, use cache if valid
+    });
+
+    return unsubscribe;
+  }, [result.refetch]);
+
+  return result;
 }

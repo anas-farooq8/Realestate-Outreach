@@ -61,8 +61,33 @@ class DataCache {
   private fetchingDashboardStats = false;
   private fetchingPdfProposals = false;
 
+  // Cache change listeners for React hooks
+  private cacheChangeListeners: Array<() => void> = [];
+
   constructor() {
     console.log(`🚀 [CACHE INIT] Data cache system initialized`);
+  }
+
+  // Cache change notification methods
+  addCacheChangeListener(listener: () => void): () => void {
+    this.cacheChangeListeners.push(listener);
+    // Return unsubscribe function
+    return () => {
+      const index = this.cacheChangeListeners.indexOf(listener);
+      if (index > -1) {
+        this.cacheChangeListeners.splice(index, 1);
+      }
+    };
+  }
+
+  private notifyCacheChange(): void {
+    this.cacheChangeListeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (error) {
+        console.error("Error in cache change listener:", error);
+      }
+    });
   }
 
   private isExpired(entry: CacheEntry<any> | null): boolean {
@@ -109,6 +134,7 @@ class DataCache {
       }
 
       (this[fetchingKey] as any) = true;
+      console.log(`🔄 [DATABASE FETCH] Fetching ${cacheKey} from database`);
 
       try {
         const data = await fetcher();
@@ -525,7 +551,7 @@ class DataCache {
       );
     }
 
-    const fileName = `${file.name}_${Date.now()}`;
+    const fileName = `${file.name}`;
 
     const { data, error } = await this.storageClient.storage
       .from(bucketName)
@@ -828,6 +854,9 @@ class DataCache {
           data: updatedData,
           timestamp: Date.now(),
         };
+
+        // Notify React hooks about cache change
+        this.notifyCacheChange();
       }
     } catch (error) {
       console.error("Error adding PDF proposal to cache:", error);
@@ -849,6 +878,9 @@ class DataCache {
           data: updatedData,
           timestamp: Date.now(),
         };
+
+        // Notify React hooks about cache change
+        this.notifyCacheChange();
       }
     } catch (error) {
       console.error("Error removing PDF proposal from cache:", error);
