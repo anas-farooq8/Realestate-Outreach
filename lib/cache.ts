@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { createClient as createServiceRoleClient } from "@supabase/supabase-js";
 import type {
   Property,
   EmailTemplate,
@@ -35,6 +36,13 @@ class DataCache {
 
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   private supabase = createClient();
+
+  // Service role client for storage operations (bypasses RLS)
+  private storageClient = createServiceRoleClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY!
+  );
+
   private currentUserId: string | null = null;
   private userIdCacheTimestamp: number = 0;
   private readonly USER_ID_CACHE_DURATION = 60 * 1000; // Cache user ID for 1 minute
@@ -54,11 +62,7 @@ class DataCache {
   private fetchingPdfProposals = false;
 
   constructor() {
-    console.log(
-      `🚀 [CACHE INIT] Data cache system initialized (duration: ${
-        this.CACHE_DURATION / 1000
-      }s)`
-    );
+    console.log(`🚀 [CACHE INIT] Data cache system initialized`);
   }
 
   private isExpired(entry: CacheEntry<any> | null): boolean {
@@ -93,26 +97,18 @@ class DataCache {
 
       // Check if cache exists and is valid
       if (this.isValidCache(entry)) {
-        console.log(
-          `🟢 [CACHE HIT] Retrieved ${cacheKey} from cache (age: ${Math.floor(
-            (Date.now() - entry!.timestamp) / 1000
-          )}s)`
-        );
+        console.log(`🟢 [CACHE HIT] Retrieved ${cacheKey} from cache`);
         return entry!.data;
       }
 
       // Prevent concurrent fetches
       const fetchingKey = `fetching${fetchingFlag}` as keyof this;
       if (this[fetchingKey] as boolean) {
-        console.log(
-          `⏳ [CACHE WAIT] Waiting for concurrent ${cacheKey} fetch to complete`
-        );
         await new Promise((resolve) => setTimeout(resolve, 100));
         return this.fetchWithCache(cacheKey, fetchingFlag, fetcher, emptyValue);
       }
 
       (this[fetchingKey] as any) = true;
-      console.log(`🔄 [DATABASE FETCH] Fetching ${cacheKey} from database...`);
 
       try {
         const data = await fetcher();
@@ -125,7 +121,7 @@ class DataCache {
         };
 
         console.log(
-          `✅ [DATABASE FETCH COMPLETE] ${cacheKey} fetched and cached successfully`
+          `✅ [DATABASE FETCH COMPLETE] ${cacheKey} cached successfully`
         );
         return data;
       } finally {
@@ -190,15 +186,6 @@ class DataCache {
       this.currentUserId &&
       now - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
     ) {
-      // Throttle cache hit logging to reduce noise
-      if (now - this.lastLoggedCacheHit > this.LOG_THROTTLE) {
-        console.log(
-          `🟢 [USER ID CACHE HIT] Using cached user ID (age: ${Math.floor(
-            (now - this.userIdCacheTimestamp) / 1000
-          )}s) - ${this.pendingInitRequests.length} pending requests`
-        );
-        this.lastLoggedCacheHit = now;
-      }
       return this.currentUserId;
     }
 
@@ -210,9 +197,7 @@ class DataCache {
     }
 
     this.initializingUser = true;
-    console.log(
-      `🔄 [USER ID FETCH] Fetching user ID from auth... (${this.pendingInitRequests.length} requests waiting)`
-    );
+    console.log(`🔄 [USER ID FETCH] Fetching user ID from auth`);
 
     try {
       const userId = await this.getCurrentUserId();
@@ -223,20 +208,13 @@ class DataCache {
 
       if (userId) {
         console.log(
-          `✅ [USER ID FETCH COMPLETE] User ID fetched and cached successfully`
+          `✅ [USER ID FETCH COMPLETE] User authenticated successfully`
         );
-      } else {
-        console.log(`❌ [USER ID FETCH FAILED] No authenticated user found`);
       }
       return userId;
     } finally {
       this.initializingUser = false;
     }
-  }
-
-  private async isUserAuthenticated(): Promise<boolean> {
-    const userId = await this.getCurrentUserId();
-    return userId !== null;
   }
 
   async getProperties(): Promise<Property[]> {
@@ -364,16 +342,6 @@ class DataCache {
         const needsCampaignProgress = !this.isValidCache(campaignProgressEntry);
         const needsEmailTemplates = !this.isValidCache(emailTemplatesEntry);
 
-        console.log(
-          `📊 [DASHBOARD STATS] Cache status - Properties: ${
-            needsProperties ? "🔄 fetch" : "🟢 cached"
-          }, EmailLogs: ${
-            needsEmailLogs ? "🔄 fetch" : "🟢 cached"
-          }, CampaignProgress: ${
-            needsCampaignProgress ? "🔄 fetch" : "🟢 cached"
-          }, EmailTemplates: ${needsEmailTemplates ? "🔄 fetch" : "🟢 cached"}`
-        );
-
         // Use cached data when available
         if (!needsProperties) {
           properties = propertiesEntry!.data;
@@ -390,9 +358,6 @@ class DataCache {
 
         // Fetch missing data only (optimized queries for stats)
         if (needsProperties) {
-          console.log(
-            `🔄 [DASHBOARD STATS] Fetching properties count from database...`
-          );
           const { data: propertiesData, error: propertiesError } =
             await this.supabase
               .from("properties")
@@ -405,9 +370,6 @@ class DataCache {
         }
 
         if (needsEmailLogs) {
-          console.log(
-            `🔄 [DASHBOARD STATS] Fetching email logs from database...`
-          );
           const { data: emailLogsData, error: emailLogsError } =
             await this.supabase
               .from("email_logs")
@@ -419,9 +381,6 @@ class DataCache {
         }
 
         if (needsCampaignProgress) {
-          console.log(
-            `🔄 [DASHBOARD STATS] Fetching campaign progress from database...`
-          );
           const { data: campaignProgressData, error: campaignProgressError } =
             await this.supabase
               .from("campaign_progress")
@@ -438,9 +397,6 @@ class DataCache {
         }
 
         if (needsEmailTemplates) {
-          console.log(
-            `🔄 [DASHBOARD STATS] Fetching email templates from database...`
-          );
           const { data: emailTemplatesData, error: emailTemplatesError } =
             await this.supabase.from("email_templates").select("id, is_active");
 
@@ -459,10 +415,6 @@ class DataCache {
         const activeTemplates = emailTemplates.filter(
           (t) => t.is_active
         ).length;
-
-        console.log(
-          `📊 [DASHBOARD STATS COMPLETE] Calculated stats - Properties: ${totalProperties}, Emails: ${totalEmailsSent}, Replies: ${totalReplies}, Active Templates: ${activeTemplates}`
-        );
 
         return {
           totalProperties,
@@ -484,125 +436,85 @@ class DataCache {
     );
   }
 
-  // Generic safe method to reduce code duplication
-  private async safeMethod<T>(
-    method: () => Promise<T>,
-    emptyValue: T
-  ): Promise<T> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return emptyValue;
-    }
-    return method();
-  }
-
-  // Safe methods that check authentication first
-  async safeGetProperties(): Promise<Property[]> {
-    return this.safeMethod(() => this.getProperties(), []);
-  }
-
-  async safeGetEmailTemplates(): Promise<EmailTemplate[]> {
-    return this.safeMethod(() => this.getEmailTemplates(), []);
-  }
-
-  async safeGetEmailLogs(): Promise<EmailLog[]> {
-    return this.safeMethod(() => this.getEmailLogs(), []);
-  }
-
-  async safeGetCampaignProgress(): Promise<CampaignProgress | null> {
-    return this.safeMethod(() => this.getCampaignProgress(), null);
-  }
-
-  async safeGetDashboardStats(): Promise<DashboardStats> {
-    return this.safeMethod(() => this.getDashboardStats(), {
-      totalProperties: 0,
-      totalEmailsSent: 0,
-      totalReplies: 0,
-      replyRate: 0,
-      currentWeek: 1,
-      activeTemplates: 0,
-    });
-  }
-
   async getPdfProposals(): Promise<PDFProposal[]> {
     return this.fetchWithCache(
       "pdfProposals",
-      "PDFProposals",
-      async () => {
-        const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
-        if (!bucketName) {
-          throw new Error(
-            "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
-          );
-        }
-        console.log(
-          `🔄 [PDF PROPOSALS] Fetching from Supabase storage bucket: ${bucketName}`
-        );
-
-        const { data: files, error } = await this.supabase.storage
-          .from(bucketName)
-          .list("", {
-            limit: 100,
-            offset: 0,
-            sortBy: { column: "created_at", order: "desc" },
-          });
-
-        if (error) {
-          console.error(`❌ [PDF PROPOSALS] Storage error:`, error);
-          throw new Error(`Failed to fetch PDF proposals: ${error.message}`);
-        }
-
-        if (!files) {
-          console.log(`📁 [PDF PROPOSALS] No files found in bucket`);
-          return [];
-        }
-
-        // Filter for PDF files only
-        const pdfFiles = files.filter(
-          (file) =>
-            file.name.toLowerCase().endsWith(".pdf") ||
-            (file.metadata?.mimetype && file.metadata.mimetype.includes("pdf"))
-        );
-
-        console.log(`📁 [PDF PROPOSALS] Found ${pdfFiles.length} PDF files`);
-
-        // Generate public URLs for each PDF using the public bucket URL
-        const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
-
-        return pdfFiles.map((file) => ({
-          name: file.name,
-          size: file.metadata?.size || 0,
-          created_at: file.created_at,
-          updated_at: file.updated_at,
-          last_accessed_at: file.last_accessed_at,
-          publicUrl: bucketBaseUrl
-            ? `${bucketBaseUrl}/${encodeURIComponent(file.name)}`
-            : undefined,
-          metadata: file.metadata
-            ? {
-                eTag: file.metadata.eTag || "",
-                mimetype: file.metadata.mimetype || "application/pdf",
-                cacheControl: file.metadata.cacheControl || "",
-                lastModified: file.metadata.lastModified || "",
-                contentLength:
-                  file.metadata.contentLength || file.metadata.size || 0,
-                httpStatusCode: file.metadata.httpStatusCode || 200,
-              }
-            : null,
-        }));
-      },
+      "PdfProposals",
+      () => this.fetchPdfProposalsFromStorage(),
       []
     );
   }
 
-  async safeGetPdfProposals(): Promise<PDFProposal[]> {
-    return this.safeMethod(() => this.getPdfProposals(), []);
+  private async fetchPdfProposalsFromStorage(): Promise<PDFProposal[]> {
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
+    if (!bucketName) {
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
+    }
+
+    const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+
+    console.log(`🔄 [DATABASE FETCH] Fetching PDF proposals from storage`);
+
+    const { data: files, error } = await this.storageClient.storage
+      .from(bucketName)
+      .list("", {
+        limit: 100,
+        offset: 0,
+        sortBy: { column: "created_at", order: "desc" },
+      });
+
+    if (error) {
+      throw new Error(`Failed to fetch PDF proposals: ${error.message}`);
+    }
+
+    if (!files || files.length === 0) {
+      return [];
+    }
+
+    // Filter for PDF files only
+    const pdfFiles = files.filter(
+      (file) =>
+        file.name.toLowerCase().endsWith(".pdf") ||
+        (file.metadata?.mimetype && file.metadata.mimetype.includes("pdf"))
+    );
+
+    // Map files to PDFProposal format
+    const proposals = pdfFiles.map((file) => {
+      const publicUrl = bucketBaseUrl
+        ? `${bucketBaseUrl}/${encodeURIComponent(file.name)}`
+        : undefined;
+
+      return {
+        name: file.name,
+        size: file.metadata?.size || 0,
+        created_at: file.created_at || new Date().toISOString(),
+        updated_at: file.updated_at || new Date().toISOString(),
+        last_accessed_at: file.last_accessed_at || new Date().toISOString(),
+        publicUrl,
+        metadata: file.metadata
+          ? {
+              eTag: file.metadata.eTag || "",
+              mimetype: file.metadata.mimetype || "application/pdf",
+              cacheControl: file.metadata.cacheControl || "",
+              lastModified: file.metadata.lastModified || "",
+              contentLength:
+                file.metadata.contentLength || file.metadata.size || 0,
+              httpStatusCode: file.metadata.httpStatusCode || 200,
+            }
+          : null,
+      };
+    });
+
+    return proposals;
   }
 
   // PDF Proposals management methods
   async uploadPdfProposal(file: File): Promise<string> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
+    // Ensure user context is available (this will handle authentication)
+    const userId = await this.ensureUserContext();
+    if (!userId) {
       throw new Error("User not authenticated");
     }
 
@@ -612,13 +524,10 @@ class DataCache {
         "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
       );
     }
-    console.log(
-      `⬆️ [PDF UPLOAD] Uploading file: ${file.name} (${file.size} bytes) to bucket: ${bucketName}`
-    );
 
-    const fileName = `${Date.now()}_${file.name}`;
+    const fileName = `${file.name}_${Date.now()}`;
 
-    const { data, error } = await this.supabase.storage
+    const { data, error } = await this.storageClient.storage
       .from(bucketName)
       .upload(fileName, file, {
         cacheControl: "3600",
@@ -626,21 +535,20 @@ class DataCache {
       });
 
     if (error) {
-      console.error(`❌ [PDF UPLOAD] Upload error:`, error);
       throw new Error(`Failed to upload PDF: ${error.message}`);
     }
 
-    console.log(`✅ [PDF UPLOAD] Successfully uploaded: ${fileName}`);
-
     // Add to cache instead of invalidating for better performance
+    console.log(`➕ [CACHE ADD] Adding PDF to cache: ${fileName}`);
     this.addPdfProposalToCache(fileName, file.size);
 
     return data.path;
   }
 
   async deletePdfProposal(fileName: string): Promise<void> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
+    // Ensure user context is available (this will handle authentication)
+    const userId = await this.ensureUserContext();
+    if (!userId) {
       throw new Error("User not authenticated");
     }
 
@@ -650,22 +558,17 @@ class DataCache {
         "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
       );
     }
-    console.log(
-      `🗑️ [PDF DELETE] Deleting file: ${fileName} from bucket: ${bucketName}`
-    );
 
-    const { error } = await this.supabase.storage
+    const { error } = await this.storageClient.storage
       .from(bucketName)
       .remove([fileName]);
 
     if (error) {
-      console.error(`❌ [PDF DELETE] Delete error:`, error);
       throw new Error(`Failed to delete PDF: ${error.message}`);
     }
 
-    console.log(`✅ [PDF DELETE] Successfully deleted: ${fileName}`);
-
     // Remove from cache instead of invalidating for better performance
+    console.log(`�️ [CACHE REMOVE] Removing PDF from cache: ${fileName}`);
     this.removePdfProposalFromCache(fileName);
   }
 
@@ -680,33 +583,8 @@ class DataCache {
     }
 
     const publicUrl = `${bucketBaseUrl}/${encodeURIComponent(fileName)}`;
-    console.log(`👁️ [PDF VIEW] Generated public URL: ${publicUrl}`);
     return publicUrl;
   }
-
-  // Get PDF proposal URL from cache if available, otherwise generate it
-  async getPdfProposalUrl(fileName: string): Promise<string> {
-    try {
-      // First try to get from cache
-      const proposals = await this.safeGetPdfProposals();
-      const proposal = proposals.find((p) => p.name === fileName);
-
-      if (proposal && proposal.publicUrl) {
-        console.log(`📋 [PDF URL] Retrieved cached URL for: ${fileName}`);
-        return proposal.publicUrl;
-      }
-
-      // If not in cache, generate URL
-      console.log(`🔄 [PDF URL] Generating URL for: ${fileName}`);
-      return this.viewPdfProposal(fileName);
-    } catch (error) {
-      console.error(`❌ [PDF URL] Error getting URL for ${fileName}:`, error);
-      // Return fallback URL
-      return this.viewPdfProposal(fileName);
-    }
-  }
-
-  // Remove the getPdfProposalUrl method since we're using public URLs now
 
   // Update cache directly instead of invalidating (more efficient)
   updateEmailTemplateInCache(updatedTemplate: EmailTemplate): void {
@@ -714,7 +592,7 @@ class DataCache {
       const entry = this.cache.emailTemplates;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
         console.log(
-          `🔄 [CACHE UPDATE] Email template updated in cache (ID: ${updatedTemplate.id})`
+          `🔄 [CACHE UPDATE] Email template updated: ${updatedTemplate.id}`
         );
         const updatedData = entry.data.map((template) =>
           template.id === updatedTemplate.id ? updatedTemplate : template
@@ -722,12 +600,8 @@ class DataCache {
         this.cache.emailTemplates = {
           ...entry,
           data: updatedData,
-          timestamp: Date.now(), // Update timestamp
+          timestamp: Date.now(),
         };
-      } else {
-        console.log(
-          `⚠️ [CACHE UPDATE] Email template cache invalid, update skipped (ID: ${updatedTemplate.id})`
-        );
       }
     } catch (error) {
       console.error("Error updating email template in cache:", error);
@@ -738,19 +612,13 @@ class DataCache {
     try {
       const entry = this.cache.emailTemplates;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        console.log(
-          `➕ [CACHE ADD] Email template added to cache (ID: ${newTemplate.id})`
-        );
+        console.log(`➕ [CACHE ADD] Email template added: ${newTemplate.id}`);
         const updatedData = [newTemplate, ...entry.data];
         this.cache.emailTemplates = {
           ...entry,
           data: updatedData,
-          timestamp: Date.now(), // Update timestamp
+          timestamp: Date.now(),
         };
-      } else {
-        console.log(
-          `⚠️ [CACHE ADD] Email template cache invalid, add skipped (ID: ${newTemplate.id})`
-        );
       }
     } catch (error) {
       console.error("Error adding email template to cache:", error);
@@ -761,210 +629,115 @@ class DataCache {
     try {
       const entry = this.cache.emailTemplates;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        console.log(
-          `🗑️ [CACHE REMOVE] Email template removed from cache (ID: ${templateId})`
-        );
+        console.log(`🗑️ [CACHE REMOVE] Email template removed: ${templateId}`);
         const updatedData = entry.data.filter(
           (template) => template.id !== templateId
         );
         this.cache.emailTemplates = {
           ...entry,
           data: updatedData,
-          timestamp: Date.now(), // Update timestamp
+          timestamp: Date.now(),
         };
-      } else {
-        console.log(
-          `⚠️ [CACHE REMOVE] Email template cache invalid, remove skipped (ID: ${templateId})`
-        );
       }
     } catch (error) {
       console.error("Error removing email template from cache:", error);
     }
   }
 
-  // Invalidate cache when data is modified
-  invalidateProperties(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] Properties cache invalidated`);
-      this.cache.properties = null;
-    } catch (error) {
-      console.error("Error invalidating properties cache:", error);
-    }
+  // Private invalidate methods used only internally by refresh methods
+  private invalidateProperties(): void {
+    this.cache.properties = null;
   }
 
-  invalidateEmailTemplates(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] Email templates cache invalidated`);
-      this.cache.emailTemplates = null;
-    } catch (error) {
-      console.error("Error invalidating email templates cache:", error);
-    }
+  private invalidateEmailTemplates(): void {
+    this.cache.emailTemplates = null;
   }
 
-  invalidateEmailLogs(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] Email logs cache invalidated`);
-      this.cache.emailLogs = null;
-    } catch (error) {
-      console.error("Error invalidating email logs cache:", error);
-    }
+  private invalidateEmailLogs(): void {
+    this.cache.emailLogs = null;
   }
 
-  invalidateCampaignProgress(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] Campaign progress cache invalidated`);
-      this.cache.campaignProgress = null;
-    } catch (error) {
-      console.error("Error invalidating campaign progress cache:", error);
-    }
+  private invalidateCampaignProgress(): void {
+    this.cache.campaignProgress = null;
   }
 
-  invalidateDashboardStats(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] Dashboard stats cache invalidated`);
-      this.cache.dashboardStats = null;
-    } catch (error) {
-      console.error("Error invalidating dashboard stats cache:", error);
-    }
+  private invalidateDashboardStats(): void {
+    this.cache.dashboardStats = null;
   }
 
-  invalidatePdfProposals(): void {
-    try {
-      console.log(`🗑️ [CACHE INVALIDATE] PDF proposals cache invalidated`);
-      this.cache.pdfProposals = null;
-    } catch (error) {
-      console.error("Error invalidating PDF proposals cache:", error);
-    }
+  private invalidatePdfProposals(): void {
+    this.cache.pdfProposals = null;
   }
 
   // Clear all cache (e.g., on logout)
   clearAll(): void {
-    try {
-      console.log(`🧹 [CACHE CLEAR] All cache cleared (logout/user change)`);
-      this.cache = {
-        properties: null,
-        emailTemplates: null,
-        emailLogs: null,
-        campaignProgress: null,
-        dashboardStats: null,
-        pdfProposals: null,
-      };
-      this.currentUserId = null;
-      this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
-      this.initializingUser = false; // Clear initialization flag
-      this.fetchingProperties = false;
-      this.fetchingEmailTemplates = false;
-      this.fetchingEmailLogs = false;
-      this.fetchingCampaignProgress = false;
-      this.fetchingDashboardStats = false;
-    } catch (error) {
-      console.error("Error clearing cache:", error);
-    }
+    console.log(`🧹 [CACHE CLEAR] All cache cleared`);
+    this.cache = {
+      properties: null,
+      emailTemplates: null,
+      emailLogs: null,
+      campaignProgress: null,
+      dashboardStats: null,
+      pdfProposals: null,
+    };
+    this.currentUserId = null;
+    this.userIdCacheTimestamp = 0;
+    this.initializingUser = false;
+    this.fetchingProperties = false;
+    this.fetchingEmailTemplates = false;
+    this.fetchingEmailLogs = false;
+    this.fetchingCampaignProgress = false;
+    this.fetchingDashboardStats = false;
+    this.fetchingPdfProposals = false;
   }
 
-  // Force refresh data
+  // Force refresh data (publicly accessible)
   async refreshProperties(): Promise<Property[]> {
-    try {
-      this.invalidateProperties();
-      return await this.getProperties();
-    } catch (error) {
-      console.error("Error refreshing properties:", error);
-      return this.cache.properties?.data || [];
-    }
+    this.invalidateProperties();
+    return await this.getProperties();
   }
 
   async refreshEmailTemplates(): Promise<EmailTemplate[]> {
-    try {
-      this.invalidateEmailTemplates();
-      return await this.getEmailTemplates();
-    } catch (error) {
-      console.error("Error refreshing email templates:", error);
-      return this.cache.emailTemplates?.data || [];
-    }
+    this.invalidateEmailTemplates();
+    return await this.getEmailTemplates();
   }
 
   async refreshEmailLogs(): Promise<EmailLog[]> {
-    try {
-      this.invalidateEmailLogs();
-      return await this.getEmailLogs();
-    } catch (error) {
-      console.error("Error refreshing email logs:", error);
-      return this.cache.emailLogs?.data || [];
-    }
+    this.invalidateEmailLogs();
+    return await this.getEmailLogs();
   }
 
   async refreshCampaignProgress(): Promise<CampaignProgress | null> {
-    try {
-      this.invalidateCampaignProgress();
-      return await this.getCampaignProgress();
-    } catch (error) {
-      console.error("Error refreshing campaign progress:", error);
-      return this.cache.campaignProgress?.data || null;
-    }
+    this.invalidateCampaignProgress();
+    return await this.getCampaignProgress();
   }
 
   async refreshDashboardStats(): Promise<DashboardStats> {
-    try {
-      this.invalidateDashboardStats();
-      return await this.getDashboardStats();
-    } catch (error) {
-      console.error("Error refreshing dashboard stats:", error);
-      return (
-        this.cache.dashboardStats?.data || {
-          totalProperties: 0,
-          totalEmailsSent: 0,
-          totalReplies: 0,
-          replyRate: 0,
-          currentWeek: 1,
-          activeTemplates: 0,
-        }
-      );
-    }
+    this.invalidateDashboardStats();
+    return await this.getDashboardStats();
   }
 
   async refreshPdfProposals(): Promise<PDFProposal[]> {
-    try {
-      this.invalidatePdfProposals();
-      return await this.getPdfProposals();
-    } catch (error) {
-      console.error("Error refreshing PDF proposals:", error);
-      return this.cache.pdfProposals?.data || [];
+    console.log(`🔄 [DATABASE FETCH] Refreshing PDF proposals from storage`);
+    // Clear fetching flag to ensure fresh fetch
+    this.fetchingPdfProposals = false;
+    // Invalidate cache completely
+    this.invalidatePdfProposals();
+    // Force fresh fetch from storage
+    const result = await this.fetchPdfProposalsFromStorage();
+    // Update cache with fresh data
+    const userId = await this.ensureUserContext();
+    if (userId) {
+      this.cache.pdfProposals = {
+        data: result,
+        timestamp: Date.now(),
+        userId: userId,
+      };
     }
+    return result;
   }
 
-  // Safe refresh methods - using generic safe method
-  async safeRefreshProperties(): Promise<Property[]> {
-    return this.safeMethod(() => this.refreshProperties(), []);
-  }
-
-  async safeRefreshEmailTemplates(): Promise<EmailTemplate[]> {
-    return this.safeMethod(() => this.refreshEmailTemplates(), []);
-  }
-
-  async safeRefreshEmailLogs(): Promise<EmailLog[]> {
-    return this.safeMethod(() => this.refreshEmailLogs(), []);
-  }
-
-  async safeRefreshCampaignProgress(): Promise<CampaignProgress | null> {
-    return this.safeMethod(() => this.refreshCampaignProgress(), null);
-  }
-
-  async safeRefreshDashboardStats(): Promise<DashboardStats> {
-    return this.safeMethod(() => this.refreshDashboardStats(), {
-      totalProperties: 0,
-      totalEmailsSent: 0,
-      totalReplies: 0,
-      replyRate: 0,
-      currentWeek: 1,
-      activeTemplates: 0,
-    });
-  }
-
-  async safeRefreshPdfProposals(): Promise<PDFProposal[]> {
-    return this.safeMethod(() => this.refreshPdfProposals(), []);
-  }
-
-  // Check if cache has data for current user - unified implementation
+  // Cache validation methods (used by hooks)
   hasValidPropertiesCache(): boolean {
     return this.isValidCache(this.cache.properties);
   }
@@ -989,101 +762,6 @@ class DataCache {
     return this.isValidCache(this.cache.pdfProposals);
   }
 
-  // Check if currently fetching data
-  isFetchingProperties(): boolean {
-    return this.fetchingProperties;
-  }
-
-  isFetchingEmailTemplates(): boolean {
-    return this.fetchingEmailTemplates;
-  }
-
-  isFetchingEmailLogs(): boolean {
-    return this.fetchingEmailLogs;
-  }
-
-  isFetchingCampaignProgress(): boolean {
-    return this.fetchingCampaignProgress;
-  }
-
-  isFetchingDashboardStats(): boolean {
-    return this.fetchingDashboardStats;
-  }
-
-  isFetchingPdfProposals(): boolean {
-    return this.fetchingPdfProposals;
-  }
-
-  // Get cache status
-  getCacheStatus() {
-    return {
-      properties: {
-        cached: this.cache.properties !== null,
-        valid: this.hasValidPropertiesCache(),
-        fetching: this.fetchingProperties,
-        timestamp: this.cache.properties?.timestamp || null,
-        userId: this.cache.properties?.userId || null,
-        dataLength: this.cache.properties?.data?.length || 0,
-      },
-      emailTemplates: {
-        cached: this.cache.emailTemplates !== null,
-        valid: this.hasValidEmailTemplatesCache(),
-        fetching: this.fetchingEmailTemplates,
-        timestamp: this.cache.emailTemplates?.timestamp || null,
-        userId: this.cache.emailTemplates?.userId || null,
-        dataLength: this.cache.emailTemplates?.data?.length || 0,
-      },
-      emailLogs: {
-        cached: this.cache.emailLogs !== null,
-        valid: this.hasValidEmailLogsCache(),
-        fetching: this.fetchingEmailLogs,
-        timestamp: this.cache.emailLogs?.timestamp || null,
-        userId: this.cache.emailLogs?.userId || null,
-        dataLength: this.cache.emailLogs?.data?.length || 0,
-      },
-      campaignProgress: {
-        cached: this.cache.campaignProgress !== null,
-        valid: this.hasValidCampaignProgressCache(),
-        fetching: this.fetchingCampaignProgress,
-        timestamp: this.cache.campaignProgress?.timestamp || null,
-        userId: this.cache.campaignProgress?.userId || null,
-        dataLength: this.cache.campaignProgress?.data ? 1 : 0,
-      },
-      dashboardStats: {
-        cached: this.cache.dashboardStats !== null,
-        valid: this.hasValidDashboardStatsCache(),
-        fetching: this.fetchingDashboardStats,
-        timestamp: this.cache.dashboardStats?.timestamp || null,
-        userId: this.cache.dashboardStats?.userId || null,
-        dataLength: this.cache.dashboardStats?.data ? 1 : 0,
-      },
-      pdfProposals: {
-        cached: this.cache.pdfProposals !== null,
-        valid: this.hasValidPdfProposalsCache(),
-        fetching: this.fetchingPdfProposals,
-        timestamp: this.cache.pdfProposals?.timestamp || null,
-        userId: this.cache.pdfProposals?.userId || null,
-        dataLength: this.cache.pdfProposals?.data?.length || 0,
-      },
-      currentUserId: this.currentUserId,
-    };
-  }
-
-  // Get cache age in minutes
-  getCacheAge(
-    type:
-      | "properties"
-      | "emailTemplates"
-      | "emailLogs"
-      | "campaignProgress"
-      | "dashboardStats"
-      | "pdfProposals"
-  ): number | null {
-    const entry = this.cache[type];
-    if (!entry) return null;
-    return Math.floor((Date.now() - entry.timestamp) / (1000 * 60));
-  }
-
   // Safe clear method that doesn't throw errors
   clearAllSafe(): void {
     try {
@@ -1099,16 +777,30 @@ class DataCache {
         pdfProposals: null,
       };
       this.currentUserId = null;
-      this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
-      this.initializingUser = false; // Clear initialization flag
+      this.userIdCacheTimestamp = 0;
+      this.initializingUser = false;
+      this.fetchingProperties = false;
+      this.fetchingEmailTemplates = false;
+      this.fetchingEmailLogs = false;
+      this.fetchingCampaignProgress = false;
+      this.fetchingDashboardStats = false;
+      this.fetchingPdfProposals = false;
     }
   }
 
   // PDF Cache management methods for better performance
   addPdfProposalToCache(fileName: string, fileSize: number): void {
+    console.log(
+      `➕ [PDF CACHE ADD] Adding PDF to cache: ${fileName}, size: ${fileSize} bytes`
+    );
+
     try {
       const entry = this.cache.pdfProposals;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        console.log(
+          `🔄 [PDF CACHE ADD] Valid cache found, adding PDF proposal`
+        );
+
         const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
 
         const newProposal: PDFProposal = {
@@ -1130,17 +822,12 @@ class DataCache {
           },
         };
 
-        console.log(`➕ [CACHE ADD] PDF proposal added to cache: ${fileName}`);
         const updatedData = [newProposal, ...entry.data];
         this.cache.pdfProposals = {
           ...entry,
           data: updatedData,
           timestamp: Date.now(),
         };
-      } else {
-        console.log(
-          `⚠️ [CACHE ADD] PDF proposal cache invalid, add skipped: ${fileName}`
-        );
       }
     } catch (error) {
       console.error("Error adding PDF proposal to cache:", error);
@@ -1148,24 +835,20 @@ class DataCache {
   }
 
   removePdfProposalFromCache(fileName: string): void {
+    console.log(`🗑️ [CACHE REMOVE] Removing PDF from cache: ${fileName}`);
+
     try {
       const entry = this.cache.pdfProposals;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        console.log(
-          `🗑️ [CACHE REMOVE] PDF proposal removed from cache: ${fileName}`
-        );
         const updatedData = entry.data.filter(
           (proposal) => proposal.name !== fileName
         );
+
         this.cache.pdfProposals = {
           ...entry,
           data: updatedData,
           timestamp: Date.now(),
         };
-      } else {
-        console.log(
-          `⚠️ [CACHE REMOVE] PDF proposal cache invalid, remove skipped: ${fileName}`
-        );
       }
     } catch (error) {
       console.error("Error removing PDF proposal from cache:", error);

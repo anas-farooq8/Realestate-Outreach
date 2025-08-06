@@ -263,8 +263,8 @@ export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
 export function useCachedPdfProposals(options: UseCachedDataOptions = {}) {
   const config = useMemo<CacheMethodConfig<PDFProposal[]>>(
     () => ({
-      cacheMethod: () => dataCache.safeGetPdfProposals(),
-      refreshMethod: () => dataCache.getPdfProposals(),
+      cacheMethod: () => dataCache.getPdfProposals(),
+      refreshMethod: () => dataCache.refreshPdfProposals(),
       hasValidCacheMethod: () => dataCache.hasValidPdfProposalsCache(),
       emptyValue: [],
       errorMessagePrefix: "PDF proposals",

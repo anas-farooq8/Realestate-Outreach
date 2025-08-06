@@ -27,18 +27,40 @@ import {
   FileText,
   Upload,
   Trash2,
-  Eye,
-  ExternalLink,
+  Info,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useCachedPdfProposals } from "@/hooks/use-cached-data";
 import type { PDFProposal } from "@/lib/types";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 10;
 
 export default function ProposalsPage() {
+  // Use cached PDF proposals hook for efficient data management
+  // This hook automatically handles loading, caching, and refreshing of PDF data
   const {
     data: pdfProposals,
     loading: pdfProposalsLoading,
+    error: pdfProposalsError,
     refresh: refreshPdfProposals,
   } = useCachedPdfProposals({ autoFetch: true, refreshOnMount: false });
 
@@ -50,10 +72,12 @@ export default function ProposalsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [selectedPdfForMetadata, setSelectedPdfForMetadata] =
+    useState<PDFProposal | null>(null);
+  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
 
   const { toast } = useToast();
 
-  // PDF Proposal management functions
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
@@ -72,6 +96,8 @@ export default function ProposalsPage() {
     setUploadingPdf(true);
     try {
       const { dataCache } = await import("@/lib/cache");
+      // This calls uploadPdfProposal which uses addPdfProposalToCache internally
+      // for efficient cache updates without full cache invalidation
       await dataCache.uploadPdfProposal(file);
 
       toast({
@@ -79,8 +105,7 @@ export default function ProposalsPage() {
         description: `${file.name} has been uploaded successfully.`,
       });
 
-      // Refresh the PDF proposals list
-      await refreshPdfProposals();
+      // Cache is already updated by addPdfProposalToCache, no refresh needed
     } catch (error) {
       console.error("Upload failed:", error);
       toast({
@@ -99,6 +124,8 @@ export default function ProposalsPage() {
   const handleDeletePdf = async (fileName: string) => {
     try {
       const { dataCache } = await import("@/lib/cache");
+      // This calls deletePdfProposal which uses removePdfProposalFromCache internally
+      // for efficient cache updates without full cache invalidation
       await dataCache.deletePdfProposal(fileName);
 
       toast({
@@ -106,8 +133,8 @@ export default function ProposalsPage() {
         description: `${fileName} has been deleted successfully.`,
       });
 
-      // Refresh the PDF proposals list
-      await refreshPdfProposals();
+      // The cache is automatically updated by removePdfProposalFromCache
+      // The UI will update automatically through the hook
     } catch (error) {
       console.error("Delete failed:", error);
       toast({
@@ -119,8 +146,21 @@ export default function ProposalsPage() {
     }
   };
 
-  const handleViewPdf = (publicUrl: string) => {
-    window.open(publicUrl, "_blank");
+  const handleRowClick = (pdf: PDFProposal) => {
+    if (pdf.publicUrl) {
+      window.open(pdf.publicUrl, "_blank");
+    } else {
+      toast({
+        title: "View Failed",
+        description: "PDF URL is not available",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleShowMetadata = (pdf: PDFProposal) => {
+    setSelectedPdfForMetadata(pdf);
+    setIsMetadataDialogOpen(true);
   };
 
   const applyFilters = () => {
@@ -132,6 +172,13 @@ export default function ProposalsPage() {
         pdf.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
+
+    // Sort by upload date (newest first)
+    filteredPdfs.sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateB - dateA; // Newest first
+    });
 
     setFilteredPdfProposals(filteredPdfs);
     setCurrentPage(1);
@@ -148,12 +195,16 @@ export default function ProposalsPage() {
 
   const handleRefresh = async () => {
     try {
-      await refreshPdfProposals();
+      // Force refresh by calling cache refresh directly (bypasses cache)
+      const { dataCache } = await import("@/lib/cache");
+      await dataCache.refreshPdfProposals();
+
       toast({
         title: "Data Refreshed",
-        description: "PDF proposals list has been updated",
+        description: "PDF proposals list has been updated from database",
       });
     } catch (error) {
+      console.error("Refresh error:", error);
       toast({
         title: "Refresh Failed",
         description:
@@ -278,7 +329,19 @@ export default function ProposalsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {pdfProposalsLoading ? (
+            {pdfProposalsError ? (
+              <div className="text-center py-8">
+                <p className="text-red-500 mb-2">Error loading PDF files:</p>
+                <p className="text-sm text-gray-600">{pdfProposalsError}</p>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  className="mt-4"
+                >
+                  Try Again
+                </Button>
+              </div>
+            ) : pdfProposalsLoading ? (
               <div className="flex flex-col items-center justify-center py-8 space-y-4">
                 <RefreshCw className="h-8 w-8 animate-spin" />
                 <p className="text-gray-500">Loading PDF files...</p>
@@ -298,13 +361,16 @@ export default function ProposalsPage() {
                         <TableHead>File Name</TableHead>
                         <TableHead>Size</TableHead>
                         <TableHead>Uploaded</TableHead>
-                        <TableHead>Public URL</TableHead>
                         <TableHead>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedItems.map((pdf) => (
-                        <TableRow key={pdf.name}>
+                        <TableRow
+                          key={pdf.name}
+                          className="cursor-pointer hover:bg-gray-50"
+                          onClick={() => handleRowClick(pdf)}
+                        >
                           <TableCell className="font-medium">
                             <div className="flex items-center space-x-2">
                               <FileText className="h-4 w-4 text-red-500" />
@@ -314,45 +380,61 @@ export default function ProposalsPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            {(pdf.size / 1024 / 1024).toFixed(2)} MB
+                            {(pdf.size / 1024).toFixed(1)} KB
                           </TableCell>
                           <TableCell>
                             {new Date(pdf.created_at).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
-                            {pdf.publicUrl ? (
-                              <a
-                                href={pdf.publicUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-blue-600 hover:underline flex items-center space-x-1 truncate max-w-xs"
-                              >
-                                <span>View URL</span>
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
                             <div className="flex items-center space-x-2">
-                              {pdf.publicUrl && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleViewPdf(pdf.publicUrl!)}
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              )}
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleDeletePdf(pdf.name)}
-                                className="text-red-600 hover:text-red-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleShowMetadata(pdf);
+                                }}
+                                title="Show Metadata"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Info className="h-4 w-4" />
                               </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                    }}
+                                    className="text-red-600 hover:text-red-700"
+                                    title="Delete PDF"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete PDF
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to delete "
+                                      {pdf.name}"? This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancel
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleDeletePdf(pdf.name)}
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -434,6 +516,82 @@ export default function ProposalsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Metadata Dialog */}
+      <Dialog
+        open={isMetadataDialogOpen}
+        onOpenChange={setIsMetadataDialogOpen}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>PDF Metadata</DialogTitle>
+            <DialogDescription>
+              Details about the selected PDF file
+            </DialogDescription>
+          </DialogHeader>
+          {selectedPdfForMetadata && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  File Name
+                </label>
+                <p className="text-sm text-gray-900 break-all">
+                  {selectedPdfForMetadata.name}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Size
+                </label>
+                <p className="text-sm text-gray-900">
+                  {(selectedPdfForMetadata.size / 1024).toFixed(1)} KB
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Uploaded
+                </label>
+                <p className="text-sm text-gray-900">
+                  {new Date(selectedPdfForMetadata.created_at).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Last Modified
+                </label>
+                <p className="text-sm text-gray-900">
+                  {new Date(selectedPdfForMetadata.updated_at).toLocaleString()}
+                </p>
+              </div>
+              {selectedPdfForMetadata.metadata && (
+                <>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      MIME Type
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {selectedPdfForMetadata.metadata.mimetype}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">
+                      Content Length
+                    </label>
+                    <p className="text-sm text-gray-900">
+                      {selectedPdfForMetadata.metadata.contentLength} bytes
+                    </p>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsMetadataDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
