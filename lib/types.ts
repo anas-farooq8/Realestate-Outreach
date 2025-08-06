@@ -70,6 +70,7 @@ export interface PDFProposal {
   created_at: string;
   updated_at: string;
   last_accessed_at: string | null;
+  publicUrl?: string; // Public URL for the PDF file
   metadata: {
     eTag: string;
     mimetype: string;

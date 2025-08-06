@@ -5,6 +5,7 @@ import type {
   EmailLog,
   CampaignProgress,
   DashboardStats,
+  PDFProposal,
 } from "@/lib/types";
 
 interface CacheEntry<T> {
@@ -19,6 +20,7 @@ interface CacheStore {
   emailLogs: CacheEntry<EmailLog[]> | null;
   campaignProgress: CacheEntry<CampaignProgress | null> | null;
   dashboardStats: CacheEntry<DashboardStats> | null;
+  pdfProposals: CacheEntry<PDFProposal[]> | null;
 }
 
 class DataCache {
@@ -28,6 +30,7 @@ class DataCache {
     emailLogs: null,
     campaignProgress: null,
     dashboardStats: null,
+    pdfProposals: null,
   };
 
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
@@ -48,6 +51,7 @@ class DataCache {
   private fetchingEmailLogs = false;
   private fetchingCampaignProgress = false;
   private fetchingDashboardStats = false;
+  private fetchingPdfProposals = false;
 
   constructor() {
     console.log(
@@ -407,7 +411,7 @@ class DataCache {
           const { data: emailLogsData, error: emailLogsError } =
             await this.supabase
               .from("email_logs")
-              .select("id, campaign_week, replied, sent_at, replied");
+              .select("id, campaign_week, replied, sent_at, replied_at");
 
           if (!emailLogsError && emailLogsData) {
             emailLogs = emailLogsData as EmailLog[];
@@ -519,6 +523,190 @@ class DataCache {
       activeTemplates: 0,
     });
   }
+
+  async getPdfProposals(): Promise<PDFProposal[]> {
+    return this.fetchWithCache(
+      "pdfProposals",
+      "PDFProposals",
+      async () => {
+        const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
+        if (!bucketName) {
+          throw new Error(
+            "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+          );
+        }
+        console.log(
+          `🔄 [PDF PROPOSALS] Fetching from Supabase storage bucket: ${bucketName}`
+        );
+
+        const { data: files, error } = await this.supabase.storage
+          .from(bucketName)
+          .list("", {
+            limit: 100,
+            offset: 0,
+            sortBy: { column: "created_at", order: "desc" },
+          });
+
+        if (error) {
+          console.error(`❌ [PDF PROPOSALS] Storage error:`, error);
+          throw new Error(`Failed to fetch PDF proposals: ${error.message}`);
+        }
+
+        if (!files) {
+          console.log(`📁 [PDF PROPOSALS] No files found in bucket`);
+          return [];
+        }
+
+        // Filter for PDF files only
+        const pdfFiles = files.filter(
+          (file) =>
+            file.name.toLowerCase().endsWith(".pdf") ||
+            (file.metadata?.mimetype && file.metadata.mimetype.includes("pdf"))
+        );
+
+        console.log(`📁 [PDF PROPOSALS] Found ${pdfFiles.length} PDF files`);
+
+        // Generate public URLs for each PDF using the public bucket URL
+        const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+
+        return pdfFiles.map((file) => ({
+          name: file.name,
+          size: file.metadata?.size || 0,
+          created_at: file.created_at,
+          updated_at: file.updated_at,
+          last_accessed_at: file.last_accessed_at,
+          publicUrl: bucketBaseUrl
+            ? `${bucketBaseUrl}/${encodeURIComponent(file.name)}`
+            : undefined,
+          metadata: file.metadata
+            ? {
+                eTag: file.metadata.eTag || "",
+                mimetype: file.metadata.mimetype || "application/pdf",
+                cacheControl: file.metadata.cacheControl || "",
+                lastModified: file.metadata.lastModified || "",
+                contentLength:
+                  file.metadata.contentLength || file.metadata.size || 0,
+                httpStatusCode: file.metadata.httpStatusCode || 200,
+              }
+            : null,
+        }));
+      },
+      []
+    );
+  }
+
+  async safeGetPdfProposals(): Promise<PDFProposal[]> {
+    return this.safeMethod(() => this.getPdfProposals(), []);
+  }
+
+  // PDF Proposals management methods
+  async uploadPdfProposal(file: File): Promise<string> {
+    const isAuth = await this.isUserAuthenticated();
+    if (!isAuth) {
+      throw new Error("User not authenticated");
+    }
+
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
+    if (!bucketName) {
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
+    }
+    console.log(
+      `⬆️ [PDF UPLOAD] Uploading file: ${file.name} (${file.size} bytes) to bucket: ${bucketName}`
+    );
+
+    const fileName = `${Date.now()}_${file.name}`;
+
+    const { data, error } = await this.supabase.storage
+      .from(bucketName)
+      .upload(fileName, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      console.error(`❌ [PDF UPLOAD] Upload error:`, error);
+      throw new Error(`Failed to upload PDF: ${error.message}`);
+    }
+
+    console.log(`✅ [PDF UPLOAD] Successfully uploaded: ${fileName}`);
+
+    // Add to cache instead of invalidating for better performance
+    this.addPdfProposalToCache(fileName, file.size);
+
+    return data.path;
+  }
+
+  async deletePdfProposal(fileName: string): Promise<void> {
+    const isAuth = await this.isUserAuthenticated();
+    if (!isAuth) {
+      throw new Error("User not authenticated");
+    }
+
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
+    if (!bucketName) {
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
+    }
+    console.log(
+      `🗑️ [PDF DELETE] Deleting file: ${fileName} from bucket: ${bucketName}`
+    );
+
+    const { error } = await this.supabase.storage
+      .from(bucketName)
+      .remove([fileName]);
+
+    if (error) {
+      console.error(`❌ [PDF DELETE] Delete error:`, error);
+      throw new Error(`Failed to delete PDF: ${error.message}`);
+    }
+
+    console.log(`✅ [PDF DELETE] Successfully deleted: ${fileName}`);
+
+    // Remove from cache instead of invalidating for better performance
+    this.removePdfProposalFromCache(fileName);
+  }
+
+  // View PDF method - returns the public URL for viewing
+  async viewPdfProposal(fileName: string): Promise<string> {
+    const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+
+    if (!bucketBaseUrl) {
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_URL environment variable is not set"
+      );
+    }
+
+    const publicUrl = `${bucketBaseUrl}/${encodeURIComponent(fileName)}`;
+    console.log(`👁️ [PDF VIEW] Generated public URL: ${publicUrl}`);
+    return publicUrl;
+  }
+
+  // Get PDF proposal URL from cache if available, otherwise generate it
+  async getPdfProposalUrl(fileName: string): Promise<string> {
+    try {
+      // First try to get from cache
+      const proposals = await this.safeGetPdfProposals();
+      const proposal = proposals.find((p) => p.name === fileName);
+
+      if (proposal && proposal.publicUrl) {
+        console.log(`📋 [PDF URL] Retrieved cached URL for: ${fileName}`);
+        return proposal.publicUrl;
+      }
+
+      // If not in cache, generate URL
+      console.log(`🔄 [PDF URL] Generating URL for: ${fileName}`);
+      return this.viewPdfProposal(fileName);
+    } catch (error) {
+      console.error(`❌ [PDF URL] Error getting URL for ${fileName}:`, error);
+      // Return fallback URL
+      return this.viewPdfProposal(fileName);
+    }
+  }
+
+  // Remove the getPdfProposalUrl method since we're using public URLs now
 
   // Update cache directly instead of invalidating (more efficient)
   updateEmailTemplateInCache(updatedTemplate: EmailTemplate): void {
@@ -640,6 +828,15 @@ class DataCache {
     }
   }
 
+  invalidatePdfProposals(): void {
+    try {
+      console.log(`🗑️ [CACHE INVALIDATE] PDF proposals cache invalidated`);
+      this.cache.pdfProposals = null;
+    } catch (error) {
+      console.error("Error invalidating PDF proposals cache:", error);
+    }
+  }
+
   // Clear all cache (e.g., on logout)
   clearAll(): void {
     try {
@@ -650,6 +847,7 @@ class DataCache {
         emailLogs: null,
         campaignProgress: null,
         dashboardStats: null,
+        pdfProposals: null,
       };
       this.currentUserId = null;
       this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
@@ -724,6 +922,16 @@ class DataCache {
     }
   }
 
+  async refreshPdfProposals(): Promise<PDFProposal[]> {
+    try {
+      this.invalidatePdfProposals();
+      return await this.getPdfProposals();
+    } catch (error) {
+      console.error("Error refreshing PDF proposals:", error);
+      return this.cache.pdfProposals?.data || [];
+    }
+  }
+
   // Safe refresh methods - using generic safe method
   async safeRefreshProperties(): Promise<Property[]> {
     return this.safeMethod(() => this.refreshProperties(), []);
@@ -752,6 +960,10 @@ class DataCache {
     });
   }
 
+  async safeRefreshPdfProposals(): Promise<PDFProposal[]> {
+    return this.safeMethod(() => this.refreshPdfProposals(), []);
+  }
+
   // Check if cache has data for current user - unified implementation
   hasValidPropertiesCache(): boolean {
     return this.isValidCache(this.cache.properties);
@@ -773,6 +985,10 @@ class DataCache {
     return this.isValidCache(this.cache.dashboardStats);
   }
 
+  hasValidPdfProposalsCache(): boolean {
+    return this.isValidCache(this.cache.pdfProposals);
+  }
+
   // Check if currently fetching data
   isFetchingProperties(): boolean {
     return this.fetchingProperties;
@@ -792,6 +1008,10 @@ class DataCache {
 
   isFetchingDashboardStats(): boolean {
     return this.fetchingDashboardStats;
+  }
+
+  isFetchingPdfProposals(): boolean {
+    return this.fetchingPdfProposals;
   }
 
   // Get cache status
@@ -837,6 +1057,14 @@ class DataCache {
         userId: this.cache.dashboardStats?.userId || null,
         dataLength: this.cache.dashboardStats?.data ? 1 : 0,
       },
+      pdfProposals: {
+        cached: this.cache.pdfProposals !== null,
+        valid: this.hasValidPdfProposalsCache(),
+        fetching: this.fetchingPdfProposals,
+        timestamp: this.cache.pdfProposals?.timestamp || null,
+        userId: this.cache.pdfProposals?.userId || null,
+        dataLength: this.cache.pdfProposals?.data?.length || 0,
+      },
       currentUserId: this.currentUserId,
     };
   }
@@ -849,6 +1077,7 @@ class DataCache {
       | "emailLogs"
       | "campaignProgress"
       | "dashboardStats"
+      | "pdfProposals"
   ): number | null {
     const entry = this.cache[type];
     if (!entry) return null;
@@ -867,10 +1096,79 @@ class DataCache {
         emailLogs: null,
         campaignProgress: null,
         dashboardStats: null,
+        pdfProposals: null,
       };
       this.currentUserId = null;
       this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
       this.initializingUser = false; // Clear initialization flag
+    }
+  }
+
+  // PDF Cache management methods for better performance
+  addPdfProposalToCache(fileName: string, fileSize: number): void {
+    try {
+      const entry = this.cache.pdfProposals;
+      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+
+        const newProposal: PDFProposal = {
+          name: fileName,
+          size: fileSize,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          last_accessed_at: new Date().toISOString(),
+          publicUrl: bucketBaseUrl
+            ? `${bucketBaseUrl}/${encodeURIComponent(fileName)}`
+            : undefined,
+          metadata: {
+            eTag: "",
+            mimetype: "application/pdf",
+            cacheControl: "3600",
+            lastModified: new Date().toISOString(),
+            contentLength: fileSize,
+            httpStatusCode: 200,
+          },
+        };
+
+        console.log(`➕ [CACHE ADD] PDF proposal added to cache: ${fileName}`);
+        const updatedData = [newProposal, ...entry.data];
+        this.cache.pdfProposals = {
+          ...entry,
+          data: updatedData,
+          timestamp: Date.now(),
+        };
+      } else {
+        console.log(
+          `⚠️ [CACHE ADD] PDF proposal cache invalid, add skipped: ${fileName}`
+        );
+      }
+    } catch (error) {
+      console.error("Error adding PDF proposal to cache:", error);
+    }
+  }
+
+  removePdfProposalFromCache(fileName: string): void {
+    try {
+      const entry = this.cache.pdfProposals;
+      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        console.log(
+          `🗑️ [CACHE REMOVE] PDF proposal removed from cache: ${fileName}`
+        );
+        const updatedData = entry.data.filter(
+          (proposal) => proposal.name !== fileName
+        );
+        this.cache.pdfProposals = {
+          ...entry,
+          data: updatedData,
+          timestamp: Date.now(),
+        };
+      } else {
+        console.log(
+          `⚠️ [CACHE REMOVE] PDF proposal cache invalid, remove skipped: ${fileName}`
+        );
+      }
+    } catch (error) {
+      console.error("Error removing PDF proposal from cache:", error);
     }
   }
 }

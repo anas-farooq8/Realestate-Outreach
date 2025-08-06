@@ -152,7 +152,7 @@ export default function DashboardPage() {
     let filteredProps = [...properties];
     let filteredLogs = [...emailLogs];
 
-    // Apply search filter to both properties and logs
+    // Apply search filter to properties, and logs
     if (searchTerm) {
       filteredProps = filteredProps.filter(
         (property) =>
@@ -674,7 +674,7 @@ export default function DashboardPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search properties, names, companies, emails, or templates..."
+                  placeholder="Search properties, names, companies, emails, templates..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -1079,7 +1079,7 @@ export default function DashboardPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  ) : (
+                  ) : currentView === "logs" ? (
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1141,7 +1141,7 @@ export default function DashboardPage() {
                         ))}
                       </TableBody>
                     </Table>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Pagination */}

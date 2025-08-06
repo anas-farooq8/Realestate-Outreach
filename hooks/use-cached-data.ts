@@ -8,6 +8,7 @@ import type {
   EmailLog,
   CampaignProgress,
   DashboardStats,
+  PDFProposal,
 } from "@/lib/types";
 
 interface UseCachedDataOptions {
@@ -256,4 +257,20 @@ export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
   );
 
   return useGenericCachedData<DashboardStats>(config, options);
+}
+
+// Hook for PDF proposals
+export function useCachedPdfProposals(options: UseCachedDataOptions = {}) {
+  const config = useMemo<CacheMethodConfig<PDFProposal[]>>(
+    () => ({
+      cacheMethod: () => dataCache.safeGetPdfProposals(),
+      refreshMethod: () => dataCache.getPdfProposals(),
+      hasValidCacheMethod: () => dataCache.hasValidPdfProposalsCache(),
+      emptyValue: [],
+      errorMessagePrefix: "PDF proposals",
+    }),
+    []
+  );
+
+  return useGenericCachedData<PDFProposal[]>(config, options);
 }

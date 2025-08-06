@@ -39,7 +39,12 @@ export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
     // Define protected routes
-    const protectedRoutes = ["/dashboard", "/upload", "/email-templates"];
+    const protectedRoutes = [
+      "/dashboard",
+      "/upload",
+      "/email-templates",
+      "/proposals",
+    ];
     const authRoutes = ["/login", "/signup", "/"];
 
     const isProtectedRoute = protectedRoutes.some((route) =>

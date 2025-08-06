@@ -24,6 +24,7 @@ import {
   Menu,
   ChevronLeft,
   ChevronRight,
+  FileText,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -45,7 +46,12 @@ export function Navbar({ children }: NavbarProps) {
   const { toast } = useToast();
 
   // Check if we're on protected routes
-  const protectedRoutes = ["/dashboard", "/upload", "/email-templates"];
+  const protectedRoutes = [
+    "/dashboard",
+    "/upload",
+    "/email-templates",
+    "/proposals",
+  ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
@@ -157,6 +163,7 @@ export function Navbar({ children }: NavbarProps) {
     { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
     { href: "/upload", label: "Upload Data", icon: Upload },
     { href: "/email-templates", label: "Email Templates", icon: Mail },
+    { href: "/proposals", label: "PDF Proposals", icon: FileText },
   ];
 
   const getUserInitials = (email: string) => {

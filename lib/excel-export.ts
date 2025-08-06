@@ -13,6 +13,10 @@ export async function exportToExcel(
 
   // Determine if we're dealing with properties or email logs
   const isEmailLogs = data.length > 0 && "sent_at" in data[0];
+  console.log("isEmailLogs:", isEmailLogs);
+
+  // print data of email logs or properties
+  console.log("Data to export:", data);
 
   if (isEmailLogs) {
     // Define columns for email logs
@@ -24,8 +28,7 @@ export async function exportToExcel(
       { header: "Campaign Week", key: "campaignWeek", width: 15 },
       { header: "Sent At", key: "sentAt", width: 20 },
       { header: "Reply Status", key: "replied", width: 15 },
-      { header: "Email ID", key: "emailId", width: 25 },
-      { header: "Thread ID", key: "threadId", width: 25 },
+      { header: "Replied At", key: "repliedAt", width: 20 },
     ];
 
     // Add data rows for email logs
@@ -38,8 +41,9 @@ export async function exportToExcel(
         campaignWeek: log.campaign_week || "",
         sentAt: new Date(log.sent_at).toLocaleString(),
         replied: log.replied ? "Yes" : "No",
-        emailId: log.email_id || "",
-        threadId: log.thread_id || "",
+        repliedAt: log.replied_at
+          ? new Date(log.replied_at).toLocaleString()
+          : "",
       });
     });
   } else {
