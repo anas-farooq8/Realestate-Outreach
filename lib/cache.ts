@@ -33,6 +33,21 @@ class DataCache {
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   private supabase = createClient();
   private currentUserId: string | null = null;
+  private userIdCacheTimestamp: number = 0;
+  private readonly USER_ID_CACHE_DURATION = 60 * 1000; // Cache user ID for 1 minute
+
+  // Batch initialization system
+  private initializingUser = false;
+  private lastLoggedCacheHit = 0;
+  private readonly LOG_THROTTLE = 5000; // Only log cache hits every 5 seconds
+  private pendingInitRequests: Array<(userId: string | null) => void> = [];
+
+  // Fetching flags
+  private fetchingProperties = false;
+  private fetchingEmailTemplates = false;
+  private fetchingEmailLogs = false;
+  private fetchingCampaignProgress = false;
+  private fetchingDashboardStats = false;
 
   constructor() {
     console.log(
@@ -41,13 +56,6 @@ class DataCache {
       }s)`
     );
   }
-  private userIdCacheTimestamp: number = 0;
-  private readonly USER_ID_CACHE_DURATION = 60 * 1000; // Cache user ID for 1 minute
-  private fetchingProperties = false;
-  private fetchingEmailTemplates = false;
-  private fetchingEmailLogs = false;
-  private fetchingCampaignProgress = false;
-  private fetchingDashboardStats = false;
 
   private isExpired(entry: CacheEntry<any> | null): boolean {
     if (!entry) return true;
@@ -171,40 +179,44 @@ class DataCache {
     }
   }
 
-  // Batch initialize user context to avoid multiple getUserId calls
-  private initializingUser = false;
-
   private async ensureUserContext(): Promise<string | null> {
+    const now = Date.now();
+
     if (
       this.currentUserId &&
-      Date.now() - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
+      now - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
     ) {
-      console.log(
-        `🟢 [USER ID CACHE HIT] Using cached user ID (age: ${Math.floor(
-          (Date.now() - this.userIdCacheTimestamp) / 1000
-        )}s)`
-      );
-      return this.currentUserId;
-    }
-
-    // If already initializing, wait for it to complete
-    if (this.initializingUser) {
-      console.log(
-        `⏳ [USER ID WAIT] Waiting for concurrent user ID fetch to complete`
-      );
-      let attempts = 0;
-      while (this.initializingUser && attempts < 50) {
-        // Max 5 second wait
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        attempts++;
+      // Throttle cache hit logging to reduce noise
+      if (now - this.lastLoggedCacheHit > this.LOG_THROTTLE) {
+        console.log(
+          `🟢 [USER ID CACHE HIT] Using cached user ID (age: ${Math.floor(
+            (now - this.userIdCacheTimestamp) / 1000
+          )}s) - ${this.pendingInitRequests.length} pending requests`
+        );
+        this.lastLoggedCacheHit = now;
       }
       return this.currentUserId;
     }
 
+    // If already initializing, return a promise that resolves when initialization is complete
+    if (this.initializingUser) {
+      return new Promise((resolve) => {
+        this.pendingInitRequests.push(resolve);
+      });
+    }
+
     this.initializingUser = true;
-    console.log(`🔄 [USER ID FETCH] Fetching user ID from auth...`);
+    console.log(
+      `🔄 [USER ID FETCH] Fetching user ID from auth... (${this.pendingInitRequests.length} requests waiting)`
+    );
+
     try {
       const userId = await this.getCurrentUserId();
+
+      // Resolve all pending requests
+      this.pendingInitRequests.forEach((resolve) => resolve(userId));
+      this.pendingInitRequests = [];
+
       if (userId) {
         console.log(
           `✅ [USER ID FETCH COMPLETE] User ID fetched and cached successfully`

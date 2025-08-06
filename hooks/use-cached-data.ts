@@ -23,6 +23,10 @@ interface CacheMethodConfig<T> {
   errorMessagePrefix: string;
 }
 
+// Track hook initialization for batch monitoring
+let activeMountCount = 0;
+const mountTimes: Record<string, number> = {};
+
 // Generic hook to reduce code duplication
 function useGenericCachedData<T>(
   config: CacheMethodConfig<T>,
@@ -44,10 +48,25 @@ function useGenericCachedData<T>(
   const fetchingRef = useRef(false);
   const mountedRef = useRef(true);
 
-  // Debug: Track hook initialization
+  // Debug: Track hook initialization (throttled to reduce noise)
   useEffect(() => {
-    console.log(`🔵 [HOOK INIT] ${errorMessagePrefix} hook initialized`);
-  }, [errorMessagePrefix]);
+    const initTime = Date.now();
+    activeMountCount++;
+    mountTimes[errorMessagePrefix] = initTime;
+
+    console.log(
+      `🔵 [HOOK MOUNT] ${errorMessagePrefix} hook mounted (${activeMountCount} total active)`
+    );
+
+    return () => {
+      activeMountCount--;
+      const duration = Date.now() - initTime;
+      delete mountTimes[errorMessagePrefix];
+      console.log(
+        `🔴 [HOOK UNMOUNT] ${errorMessagePrefix} hook unmounted (lived: ${duration}ms, ${activeMountCount} remaining)`
+      );
+    };
+  }, []); // Empty deps = only on mount/unmount
 
   const fetchData = useCallback(
     async (forceRefresh = false) => {
