@@ -60,7 +60,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useCachedEmailTemplates } from "@/hooks/use-cached-data";
 import { dataCache } from "@/lib/cache";
-import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react";
+import {
+  Plus,
+  Edit2,
+  Trash2,
+  RefreshCw,
+  Eye,
+  Filter,
+  Search,
+} from "lucide-react";
 import type { EmailTemplate } from "@/lib/types";
 
 type FilterType = "all" | "active" | "inactive";
@@ -586,15 +594,33 @@ export default function EmailTemplatesPage() {
           </div>
         </div>
 
-        {/* Filters, Search, and Sort */}
+        {/* Search and Filters Section */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="space-y-4">
+              {/* Search Bar - First Row */}
+              <div className="flex items-center space-x-2">
+                <Search className="h-5 w-5 text-gray-400" />
+                <Input
+                  placeholder="Search templates by name, subject, or hook..."
+                  value={searchTerm}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="max-w-md"
+                />
+              </div>
+
+              {/* Filter and Sort Options - Second Row */}
+              <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+                <div className="flex flex-wrap gap-4 items-center">
+                  {/* Status Filter */}
                   <div className="flex items-center space-x-2">
                     <Filter className="h-4 w-4 text-gray-500" />
-                    <Label htmlFor="filter">Filter:</Label>
+                    <Label
+                      htmlFor="status-filter"
+                      className="text-sm font-medium"
+                    >
+                      Status:
+                    </Label>
                     <Select value={filter} onValueChange={handleFilterChange}>
                       <SelectTrigger className="w-32">
                         <SelectValue />
@@ -606,52 +632,51 @@ export default function EmailTemplatesPage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Sort Options */}
                   <div className="flex items-center space-x-2">
-                    <Label htmlFor="search">Search:</Label>
-                    <Input
-                      id="search"
-                      placeholder="Search templates..."
-                      value={searchTerm}
-                      onChange={(e) => handleSearchChange(e.target.value)}
-                      className="w-64"
-                    />
+                    <Label className="text-sm font-medium text-gray-500">
+                      Sort by:
+                    </Label>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant={
+                          sortField === "created_at" ? "default" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => handleSortChange("created_at")}
+                        className="flex items-center space-x-1"
+                      >
+                        <span>Created</span>
+                        {sortField === "created_at" && (
+                          <span className="text-xs">
+                            {sortOrder === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </Button>
+                      <Button
+                        variant={
+                          sortField === "updated_at" ? "default" : "outline"
+                        }
+                        size="sm"
+                        onClick={() => handleSortChange("updated_at")}
+                        className="flex items-center space-x-1"
+                      >
+                        <span>Updated</span>
+                        {sortField === "updated_at" && (
+                          <span className="text-xs">
+                            {sortOrder === "asc" ? "↑" : "↓"}
+                          </span>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 </div>
+
+                {/* Results Count */}
                 <div className="text-sm text-gray-500">
                   Showing {paginatedTemplates.length} of{" "}
                   {filteredAndSortedTemplates.length} templates
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-4">
-                <Label className="text-sm font-medium">Sort by:</Label>
-                <div className="flex space-x-2">
-                  <Button
-                    variant={sortField === "created_at" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSortChange("created_at")}
-                    className="flex items-center space-x-1"
-                  >
-                    <span>Created</span>
-                    {sortField === "created_at" && (
-                      <span className="text-xs">
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </Button>
-                  <Button
-                    variant={sortField === "updated_at" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => handleSortChange("updated_at")}
-                    className="flex items-center space-x-1"
-                  >
-                    <span>Updated</span>
-                    {sortField === "updated_at" && (
-                      <span className="text-xs">
-                        {sortOrder === "asc" ? "↑" : "↓"}
-                      </span>
-                    )}
-                  </Button>
                 </div>
               </div>
             </div>

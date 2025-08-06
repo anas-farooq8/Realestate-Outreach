@@ -43,6 +43,7 @@ export interface EmailLog {
   email_id: string; // text - NOT NULL
   thread_id: string; // text - NOT NULL UNIQUE
   sent_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  replied_at: string | null; // timestamp with time zone - NULL
   // Joined data from relations (using Supabase naming)
   properties?: Property;
   email_templates?: EmailTemplate;
@@ -61,4 +62,20 @@ export interface DashboardStats {
   replyRate: number;
   currentWeek: number;
   activeTemplates: number;
+}
+
+export interface PDFProposal {
+  name: string;
+  size: number;
+  created_at: string;
+  updated_at: string;
+  last_accessed_at: string | null;
+  metadata: {
+    eTag: string;
+    mimetype: string;
+    cacheControl: string;
+    lastModified: string;
+    contentLength: number;
+    httpStatusCode: number;
+  } | null;
 }

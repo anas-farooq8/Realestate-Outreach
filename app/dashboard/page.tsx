@@ -53,6 +53,7 @@ import {
 import type { Property, EmailLog } from "@/lib/types";
 
 const ITEMS_PER_PAGE = 20;
+const EMAIL_LOGS_PER_PAGE = 50;
 
 export default function DashboardPage() {
   // Use cached data with optimized loading behavior
@@ -99,9 +100,31 @@ export default function DashboardPage() {
     campaignWeek: "all",
     replyStatus: "all",
     template: "all",
+    createdAtSort: "desc", // Default to newest first for properties
+    emailLogSort: "sent_at", // Sort field for email logs
+    emailLogSortDirection: "desc", // Sort direction for email logs
   });
 
   const { toast } = useToast();
+
+  // Handle created_at sort filter change
+  const handleCreatedAtSortChange = () => {
+    setFilters((prev) => ({
+      ...prev,
+      createdAtSort: prev.createdAtSort === "desc" ? "asc" : "desc",
+    }));
+    setCurrentPage(1);
+  };
+
+  // Sort properties by created_at
+  const sortPropertiesByCreatedAt = (properties: Property[]) => {
+    return [...properties].sort((a, b) => {
+      const aTime = new Date(a.created_at || 0).getTime();
+      const bTime = new Date(b.created_at || 0).getTime();
+
+      return filters.createdAtSort === "desc" ? bTime - aTime : aTime - bTime;
+    });
+  };
 
   // Calculate dynamic stats based on filtered data
   const calculateFilteredStats = () => {
@@ -237,6 +260,13 @@ export default function DashboardPage() {
       );
     }
 
+    // Apply sorting to properties or email logs
+    if (currentView === "properties") {
+      filteredProps = sortPropertiesByCreatedAt(filteredProps);
+    } else if (currentView === "logs") {
+      filteredLogs = sortEmailLogs(filteredLogs);
+    }
+
     setFilteredProperties(filteredProps);
     setFilteredEmailLogs(filteredLogs);
     setCurrentPage(1);
@@ -250,12 +280,57 @@ export default function DashboardPage() {
         ? filteredEmailLogs
         : [];
 
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const itemsPerPage =
+      currentView === "logs" ? EMAIL_LOGS_PER_PAGE : ITEMS_PER_PAGE;
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
     const paginated = currentData.slice(startIndex, endIndex);
 
     setPaginatedItems(paginated);
-    setTotalPages(Math.ceil(currentData.length / ITEMS_PER_PAGE));
+    setTotalPages(Math.ceil(currentData.length / itemsPerPage));
+  };
+
+  // Handle email log sort change
+  const handleEmailLogSortChange = (field: "sent_at" | "replied_at") => {
+    setFilters((prev) => ({
+      ...prev,
+      emailLogSort: field,
+      emailLogSortDirection:
+        prev.emailLogSort === field && prev.emailLogSortDirection === "desc"
+          ? "asc"
+          : "desc",
+    }));
+    setCurrentPage(1);
+  };
+
+  // Sort email logs by selected field
+  const sortEmailLogs = (logs: EmailLog[]) => {
+    return [...logs].sort((a, b) => {
+      let aValue: Date | null = null;
+      let bValue: Date | null = null;
+
+      if (filters.emailLogSort === "sent_at") {
+        aValue = new Date(a.sent_at);
+        bValue = new Date(b.sent_at);
+      } else if (filters.emailLogSort === "replied_at") {
+        aValue = a.replied_at ? new Date(a.replied_at) : null;
+        bValue = b.replied_at ? new Date(b.replied_at) : null;
+      }
+
+      // Handle null values (push to end for desc, beginning for asc)
+      if (aValue === null && bValue === null) return 0;
+      if (aValue === null)
+        return filters.emailLogSortDirection === "desc" ? 1 : -1;
+      if (bValue === null)
+        return filters.emailLogSortDirection === "desc" ? -1 : 1;
+
+      const aTime = aValue.getTime();
+      const bTime = bValue.getTime();
+
+      return filters.emailLogSortDirection === "desc"
+        ? bTime - aTime
+        : aTime - bTime;
+    });
   };
 
   const clearFilters = () => {
@@ -269,6 +344,9 @@ export default function DashboardPage() {
       campaignWeek: "all",
       replyStatus: "all",
       template: "all",
+      createdAtSort: "desc", // Reset to default
+      emailLogSort: "sent_at", // Reset to default
+      emailLogSortDirection: "desc", // Reset to default
     });
     setCurrentPage(1);
   };
@@ -554,7 +632,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* View Toggle */}
+        {/* View Toggle and Filters */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -566,7 +644,14 @@ export default function DashboardPage() {
                 <Button
                   variant={currentView === "properties" ? "default" : "outline"}
                   size="sm"
-                  onClick={() => setCurrentView("properties")}
+                  onClick={() => {
+                    setCurrentView("properties");
+                    // Reset to default sort when switching to properties
+                    setFilters((prev) => ({
+                      ...prev,
+                      createdAtSort: "desc",
+                    }));
+                  }}
                 >
                   Properties ({filteredProperties.length})
                 </Button>
@@ -596,22 +681,22 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Single Row Filters */}
+              <div className="flex flex-wrap items-center gap-3">
                 {/* Location Filters */}
-                <div className="space-y-2">
-                  <Label>State</Label>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm whitespace-nowrap">State:</Label>
                   <Select
                     value={filters.state}
                     onValueChange={(value) =>
                       setFilters({ ...filters, state: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All states" />
+                    <SelectTrigger className="w-28">
+                      <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All states</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       {uniqueStates.map((state) => (
                         <SelectItem key={state} value={state}>
                           {state}
@@ -621,19 +706,19 @@ export default function DashboardPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>County</Label>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm whitespace-nowrap">County:</Label>
                   <Select
                     value={filters.county}
                     onValueChange={(value) =>
                       setFilters({ ...filters, county: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All counties" />
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All counties</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       {uniqueCounties.map((county) => (
                         <SelectItem key={county} value={county}>
                           {county}
@@ -643,19 +728,19 @@ export default function DashboardPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>City</Label>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm whitespace-nowrap">City:</Label>
                   <Select
                     value={filters.city}
                     onValueChange={(value) =>
                       setFilters({ ...filters, city: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All cities" />
+                    <SelectTrigger className="w-32">
+                      <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All cities</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       {uniqueCities.map((city) => (
                         <SelectItem key={city} value={city}>
                           {city}
@@ -665,19 +750,19 @@ export default function DashboardPage() {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Zip Code</Label>
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm whitespace-nowrap">Zip:</Label>
                   <Select
                     value={filters.zipCode}
                     onValueChange={(value) =>
                       setFilters({ ...filters, zipCode: value })
                     }
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All zip codes" />
+                    <SelectTrigger className="w-24">
+                      <SelectValue placeholder="All" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">All zip codes</SelectItem>
+                      <SelectItem value="all">All</SelectItem>
                       {uniqueZipCodes.map((zipCode) => (
                         <SelectItem key={zipCode} value={zipCode}>
                           {zipCode}
@@ -686,84 +771,188 @@ export default function DashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Property-specific filters - only show when viewing properties */}
+                {currentView === "properties" && (
+                  <div className="flex items-center space-x-2">
+                    <Label className="text-sm whitespace-nowrap">Status:</Label>
+                    <Select
+                      value={filters.subscriptionStatus}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, subscriptionStatus: value })
+                      }
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="subscribed">Subscribed</SelectItem>
+                        <SelectItem value="unsubscribed">
+                          Unsubscribed
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Email-specific filters - only show when viewing logs */}
+                {currentView === "logs" && (
+                  <>
+                    <div className="h-6 border-l border-gray-300"></div>
+                    <div className="flex items-center space-x-2">
+                      <Label className="text-sm whitespace-nowrap">Week:</Label>
+                      <Select
+                        value={filters.campaignWeek}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, campaignWeek: value })
+                        }
+                      >
+                        <SelectTrigger className="w-24">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          {uniqueWeeks.map((week) => (
+                            <SelectItem key={week} value={week.toString()}>
+                              {week}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Label className="text-sm whitespace-nowrap">
+                        Reply:
+                      </Label>
+                      <Select
+                        value={filters.replyStatus}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, replyStatus: value })
+                        }
+                      >
+                        <SelectTrigger className="w-28">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="replied">Replied</SelectItem>
+                          <SelectItem value="not-replied">No Reply</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Label className="text-sm whitespace-nowrap">
+                        Template:
+                      </Label>
+                      <Select
+                        value={filters.template}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, template: value })
+                        }
+                      >
+                        <SelectTrigger className="w-36">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          {emailTemplates.map((template) => (
+                            <SelectItem
+                              key={template.id}
+                              value={template.id.toString()}
+                            >
+                              {template.template_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
               </div>
 
-              {/* Email-specific filters - only show when viewing logs */}
-              {currentView === "logs" && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pt-4 border-t">
-                  <div className="space-y-2">
-                    <Label>Campaign Week</Label>
-                    <Select
-                      value={filters.campaignWeek}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, campaignWeek: value })
-                      }
+              {/* Sort controls - show below filters */}
+              {currentView === "properties" && (
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-4">
+                    <Label className="text-sm font-medium text-gray-700">
+                      Sort by:
+                    </Label>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={handleCreatedAtSortChange}
+                      className="bg-black hover:bg-gray-800 text-white flex items-center space-x-2"
                     >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All weeks" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All weeks</SelectItem>
-                        {uniqueWeeks.map((week) => (
-                          <SelectItem key={week} value={week.toString()}>
-                            Week {week}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Reply Status</Label>
-                    <Select
-                      value={filters.replyStatus}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, replyStatus: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All statuses" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All statuses</SelectItem>
-                        <SelectItem value="replied">Replied</SelectItem>
-                        <SelectItem value="not-replied">Not Replied</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Template</Label>
-                    <Select
-                      value={filters.template}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, template: value })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All templates" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All templates</SelectItem>
-                        {emailTemplates.map((template) => (
-                          <SelectItem
-                            key={template.id}
-                            value={template.id.toString()}
-                          >
-                            {template.template_name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <span>Created</span>
+                      <span className="text-xs font-bold">
+                        {filters.createdAtSort === "desc" ? "↓" : "↑"}
+                      </span>
+                    </Button>
+                    <Button onClick={clearFilters} variant="outline" size="sm">
+                      Clear Filters
+                    </Button>
                   </div>
                 </div>
               )}
 
-              <div className="flex space-x-2">
-                <Button onClick={clearFilters} variant="outline" size="sm">
-                  Clear All Filters
-                </Button>
-              </div>
+              {/* Email logs sort controls */}
+              {currentView === "logs" && (
+                <div className="pt-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-4">
+                    <Label className="text-sm font-medium text-gray-700">
+                      Sort by:
+                    </Label>
+                    <Button
+                      variant={
+                        filters.emailLogSort === "sent_at"
+                          ? "default"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => handleEmailLogSortChange("sent_at")}
+                      className={`flex items-center space-x-2 ${
+                        filters.emailLogSort === "sent_at"
+                          ? "bg-black hover:bg-gray-800 text-white"
+                          : ""
+                      }`}
+                    >
+                      <span>Sent Date</span>
+                      {filters.emailLogSort === "sent_at" && (
+                        <span className="text-xs font-bold">
+                          {filters.emailLogSortDirection === "desc" ? "↓" : "↑"}
+                        </span>
+                      )}
+                    </Button>
+                    <Button
+                      variant={
+                        filters.emailLogSort === "replied_at"
+                          ? "default"
+                          : "outline"
+                      }
+                      size="sm"
+                      onClick={() => handleEmailLogSortChange("replied_at")}
+                      className={`flex items-center space-x-2 ${
+                        filters.emailLogSort === "replied_at"
+                          ? "bg-black hover:bg-gray-800 text-white"
+                          : ""
+                      }`}
+                    >
+                      <span>Reply Date</span>
+                      {filters.emailLogSort === "replied_at" && (
+                        <span className="text-xs font-bold">
+                          {filters.emailLogSortDirection === "desc" ? "↓" : "↑"}
+                        </span>
+                      )}
+                    </Button>
+                    <Button onClick={clearFilters} variant="outline" size="sm">
+                      Clear Filters
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -900,6 +1089,7 @@ export default function DashboardPage() {
                           <TableHead>Template Name</TableHead>
                           <TableHead>Campaign Week</TableHead>
                           <TableHead>Sent At</TableHead>
+                          <TableHead>Replied At</TableHead>
                           <TableHead>Reply Status</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -936,6 +1126,11 @@ export default function DashboardPage() {
                               {new Date(log.sent_at).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
+                              {log.replied_at
+                                ? new Date(log.replied_at).toLocaleDateString()
+                                : "—"}
+                            </TableCell>
+                            <TableCell>
                               <Badge
                                 variant={log.replied ? "default" : "secondary"}
                               >
@@ -953,9 +1148,18 @@ export default function DashboardPage() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <div className="text-sm text-gray-500">
-                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                      Showing{" "}
+                      {(currentPage - 1) *
+                        (currentView === "logs"
+                          ? EMAIL_LOGS_PER_PAGE
+                          : ITEMS_PER_PAGE) +
+                        1}{" "}
+                      to{" "}
                       {Math.min(
-                        currentPage * ITEMS_PER_PAGE,
+                        currentPage *
+                          (currentView === "logs"
+                            ? EMAIL_LOGS_PER_PAGE
+                            : ITEMS_PER_PAGE),
                         currentView === "properties"
                           ? filteredProperties.length
                           : filteredEmailLogs.length

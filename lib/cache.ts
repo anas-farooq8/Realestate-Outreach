@@ -407,7 +407,7 @@ class DataCache {
           const { data: emailLogsData, error: emailLogsError } =
             await this.supabase
               .from("email_logs")
-              .select("id, campaign_week, replied, sent_at");
+              .select("id, campaign_week, replied, sent_at, replied");
 
           if (!emailLogsError && emailLogsData) {
             emailLogs = emailLogsData as EmailLog[];
