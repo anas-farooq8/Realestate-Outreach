@@ -35,7 +35,6 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
-  BarChart3,
   Mail,
   Users,
   TrendingUp,
@@ -49,7 +48,6 @@ import {
   useCachedProperties,
   useCachedEmailLogs,
   useCachedCampaignProgress,
-  useCachedDashboardStats,
   useCachedEmailTemplates,
 } from "@/hooks/use-cached-data";
 import type { Property, EmailLog } from "@/lib/types";
@@ -76,12 +74,6 @@ export default function DashboardPage() {
     loading: campaignLoading,
     refresh: refreshCampaignProgress,
   } = useCachedCampaignProgress({ autoFetch: true, refreshOnMount: false });
-
-  const {
-    data: dashboardStats,
-    loading: statsLoading,
-    refresh: refreshStats,
-  } = useCachedDashboardStats({ autoFetch: true, refreshOnMount: false });
 
   const { data: emailTemplates, refresh: refreshTemplates } =
     useCachedEmailTemplates({ autoFetch: true, refreshOnMount: false });
@@ -110,6 +102,22 @@ export default function DashboardPage() {
   });
 
   const { toast } = useToast();
+
+  // Calculate dynamic stats based on filtered data
+  const calculateFilteredStats = () => {
+    const totalProperties = filteredProperties.length;
+    const totalEmailsSent = filteredEmailLogs.length;
+    const totalReplies = filteredEmailLogs.filter((log) => log.replied).length;
+    const replyRate =
+      totalEmailsSent > 0 ? (totalReplies / totalEmailsSent) * 100 : 0;
+
+    return {
+      totalProperties,
+      totalEmailsSent,
+      totalReplies,
+      replyRate,
+    };
+  };
 
   const isSubscribed = (suspendUntil: string) => {
     const suspendDate = new Date(suspendUntil);
@@ -304,7 +312,6 @@ export default function DashboardPage() {
         refreshProperties(),
         refreshEmailLogs(),
         refreshCampaignProgress(),
-        refreshStats(),
         refreshTemplates(),
       ]);
 
@@ -384,8 +391,7 @@ export default function DashboardPage() {
     applyPagination();
   }, [filteredProperties, filteredEmailLogs, currentPage, currentView]);
 
-  const loading =
-    propertiesLoading || emailLogsLoading || campaignLoading || statsLoading;
+  const loading = propertiesLoading || emailLogsLoading || campaignLoading;
 
   return (
     <div className="p-6">
@@ -481,7 +487,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Statistics Overview */}
+        {/* Statistics Overview - Dynamic based on filtered data */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card>
             <CardContent className="p-6">
@@ -492,7 +498,7 @@ export default function DashboardPage() {
                     Total Properties
                   </p>
                   <p className="text-2xl font-bold">
-                    {dashboardStats.totalProperties.toLocaleString()}
+                    {calculateFilteredStats().totalProperties.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -508,7 +514,7 @@ export default function DashboardPage() {
                     Emails Sent
                   </p>
                   <p className="text-2xl font-bold">
-                    {dashboardStats.totalEmailsSent.toLocaleString()}
+                    {calculateFilteredStats().totalEmailsSent.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -524,7 +530,7 @@ export default function DashboardPage() {
                     Total Replies
                   </p>
                   <p className="text-2xl font-bold">
-                    {dashboardStats.totalReplies.toLocaleString()}
+                    {calculateFilteredStats().totalReplies.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -540,66 +546,13 @@ export default function DashboardPage() {
                     Reply Rate
                   </p>
                   <p className="text-2xl font-bold">
-                    {dashboardStats.replyRate.toFixed(1)}%
+                    {calculateFilteredStats().replyRate.toFixed(1)}%
                   </p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Weekly Stats */}
-        {dashboardStats.weeklyStats.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center">
-                <BarChart3 className="mr-2 h-5 w-5" />
-                Weekly Performance
-              </CardTitle>
-              <CardDescription>
-                Email campaign performance by week
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {dashboardStats.weeklyStats.map((week) => (
-                  <div key={week.week} className="p-4 border rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <h4 className="font-semibold">Week {week.week}</h4>
-                      <Badge
-                        variant={
-                          week.week === campaignProgress?.current_week
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {week.week === campaignProgress?.current_week
-                          ? "Current"
-                          : "Completed"}
-                      </Badge>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Emails Sent:</span>
-                        <span className="font-medium">{week.emailsSent}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Replies:</span>
-                        <span className="font-medium">{week.replies}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Reply Rate:</span>
-                        <span className="font-medium">
-                          {week.replyRate.toFixed(1)}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* View Toggle */}
         <Card>

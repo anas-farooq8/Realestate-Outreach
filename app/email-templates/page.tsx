@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/pagination";
 import { useToast } from "@/hooks/use-toast";
 import { useCachedEmailTemplates } from "@/hooks/use-cached-data";
+import { dataCache } from "@/lib/cache";
 import { Plus, Edit2, Trash2, RefreshCw, Eye, Filter } from "lucide-react";
 import type { EmailTemplate } from "@/lib/types";
 
@@ -294,6 +295,11 @@ export default function EmailTemplatesPage() {
           title: "Template Updated",
           description: "Email template has been updated successfully",
         });
+
+        // Update cache directly instead of invalidating (more efficient)
+        dataCache.updateEmailTemplateInCache(updatedTemplate);
+        // Only invalidate dashboard stats to trigger recalculation
+        dataCache.invalidateDashboardStats();
       } else {
         // Create new template
         result = await supabase
@@ -318,6 +324,11 @@ export default function EmailTemplatesPage() {
           title: "Template Created",
           description: "Email template has been created successfully",
         });
+
+        // Add to cache directly instead of invalidating (more efficient)
+        dataCache.addEmailTemplateToCache(newTemplate);
+        // Only invalidate dashboard stats to trigger recalculation
+        dataCache.invalidateDashboardStats();
       }
 
       handleCloseDialog();
@@ -361,6 +372,11 @@ export default function EmailTemplatesPage() {
         title: "Template Deleted",
         description: "Email template has been deleted successfully",
       });
+
+      // Remove from cache directly instead of invalidating (more efficient)
+      dataCache.removeEmailTemplateFromCache(templateToDelete.id);
+      // Only invalidate dashboard stats to trigger recalculation
+      dataCache.invalidateDashboardStats();
 
       // Adjust current page if necessary
       const newFilteredCount = filteredAndSortedTemplates.length - 1;
@@ -423,6 +439,11 @@ export default function EmailTemplatesPage() {
           isActive ? "activated" : "deactivated"
         }`,
       });
+
+      // Update cache directly instead of invalidating (more efficient)
+      dataCache.updateEmailTemplateInCache(updatedTemplate);
+      // Only invalidate dashboard stats to trigger recalculation
+      dataCache.invalidateDashboardStats();
     } catch (error) {
       console.error("Error toggling template status:", error);
       toast({

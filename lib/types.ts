@@ -61,13 +61,4 @@ export interface DashboardStats {
   replyRate: number;
   currentWeek: number;
   activeTemplates: number;
-  weeklyStats: WeeklyStats[];
-}
-
-export interface WeeklyStats {
-  week: number;
-  emailsSent: number;
-  replies: number;
-  replyRate: number;
-  date: string;
 }

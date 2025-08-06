@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { dataCache } from "@/lib/cache";
 import type {
   Property,
@@ -15,15 +15,39 @@ interface UseCachedDataOptions {
   refreshOnMount?: boolean;
 }
 
-export function useCachedProperties(options: UseCachedDataOptions = {}) {
-  const { autoFetch = true, refreshOnMount = false } = options;
+interface CacheMethodConfig<T> {
+  cacheMethod: () => Promise<T>;
+  refreshMethod: () => Promise<T>;
+  hasValidCacheMethod: () => boolean;
+  emptyValue: T;
+  errorMessagePrefix: string;
+}
 
-  const [data, setData] = useState<Property[]>([]);
+// Generic hook to reduce code duplication
+function useGenericCachedData<T>(
+  config: CacheMethodConfig<T>,
+  options: UseCachedDataOptions = {}
+) {
+  const { autoFetch = true, refreshOnMount = false } = options;
+  const {
+    cacheMethod,
+    refreshMethod,
+    hasValidCacheMethod,
+    emptyValue,
+    errorMessagePrefix,
+  } = config;
+
+  const [data, setData] = useState<T>(emptyValue);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
   const fetchingRef = useRef(false);
   const mountedRef = useRef(true);
+
+  // Debug: Track hook initialization
+  useEffect(() => {
+    console.log(`🔵 [HOOK INIT] ${errorMessagePrefix} hook initialized`);
+  }, [errorMessagePrefix]);
 
   const fetchData = useCallback(
     async (forceRefresh = false) => {
@@ -33,17 +57,19 @@ export function useCachedProperties(options: UseCachedDataOptions = {}) {
         fetchingRef.current = true;
         setError(null);
 
-        const hasValidCache = dataCache.hasValidPropertiesCache();
+        const hasValidCache = hasValidCacheMethod();
 
         // Show loading for:
         // 1. Initial load (always show loading on first visit)
         // 2. Force refresh (user clicked refresh)
         // 3. No valid cache and no data
-        if (
+        const shouldShowLoading =
           initialLoad ||
           forceRefresh ||
-          (!hasValidCache && data.length === 0)
-        ) {
+          (!hasValidCache &&
+            JSON.stringify(data) === JSON.stringify(emptyValue));
+
+        if (shouldShowLoading) {
           setLoading(true);
         }
 
@@ -51,319 +77,12 @@ export function useCachedProperties(options: UseCachedDataOptions = {}) {
           setTimeout(() => reject(new Error("Request timeout")), 15000)
         );
 
-        const dataPromise = forceRefresh
-          ? dataCache.refreshProperties()
-          : dataCache.getProperties();
+        const dataPromise = forceRefresh ? refreshMethod() : cacheMethod();
 
-        const properties = await Promise.race([dataPromise, timeoutPromise]);
+        const result = await Promise.race([dataPromise, timeoutPromise]);
 
         if (mountedRef.current) {
-          const propertiesArray = properties as Property[];
-          setData(propertiesArray);
-          setInitialLoad(false);
-        }
-      } catch (err) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to load properties";
-
-        // Don't show errors for auth-related issues during sign out
-        if (
-          errorMessage.includes("Auth session missing") ||
-          errorMessage.includes("session not found") ||
-          errorMessage.includes("No session")
-        ) {
-          setData([]);
-          setError(null);
-        } else {
-          setError(errorMessage);
-          if (data.length === 0) {
-            setData([]);
-          }
-        }
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-          setInitialLoad(false);
-        }
-        fetchingRef.current = false;
-      }
-    },
-    [data.length, initialLoad]
-  );
-
-  const refresh = useCallback(async () => {
-    return fetchData(true);
-  }, [fetchData]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    if (autoFetch) {
-      fetchData(refreshOnMount);
-    }
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [autoFetch, refreshOnMount, fetchData]);
-
-  return {
-    data,
-    loading,
-    error,
-    initialLoad,
-    refetch: fetchData,
-    refresh,
-    hasData: data.length > 0,
-  };
-}
-
-export function useCachedEmailTemplates(options: UseCachedDataOptions = {}) {
-  const { autoFetch = true, refreshOnMount = false } = options;
-
-  const [data, setData] = useState<EmailTemplate[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const fetchingRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  const fetchData = useCallback(
-    async (forceRefresh = false) => {
-      if (fetchingRef.current) return;
-
-      try {
-        fetchingRef.current = true;
-        setError(null);
-
-        const hasValidCache = dataCache.hasValidEmailTemplatesCache();
-
-        // Show loading for:
-        // 1. Initial load (always show loading on first visit)
-        // 2. Force refresh (user clicked refresh)
-        // 3. No valid cache and no data
-        if (
-          initialLoad ||
-          forceRefresh ||
-          (!hasValidCache && data.length === 0)
-        ) {
-          setLoading(true);
-        }
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timeout")), 15000)
-        );
-
-        const dataPromise = forceRefresh
-          ? dataCache.refreshEmailTemplates()
-          : dataCache.getEmailTemplates();
-
-        const templates = await Promise.race([dataPromise, timeoutPromise]);
-
-        if (mountedRef.current) {
-          const templatesArray = templates as EmailTemplate[];
-          setData(templatesArray);
-          setInitialLoad(false);
-        }
-      } catch (err) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to load email templates";
-
-        // Don't show errors for auth-related issues during sign out
-        if (
-          errorMessage.includes("Auth session missing") ||
-          errorMessage.includes("session not found") ||
-          errorMessage.includes("No session")
-        ) {
-          setData([]);
-          setError(null);
-        } else {
-          setError(errorMessage);
-          if (data.length === 0) {
-            setData([]);
-          }
-        }
-        setInitialLoad(false);
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-        fetchingRef.current = false;
-      }
-    },
-    [data.length, initialLoad]
-  );
-
-  const refresh = useCallback(async () => {
-    return fetchData(true);
-  }, [fetchData]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    if (autoFetch) {
-      fetchData(refreshOnMount);
-    }
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [autoFetch, refreshOnMount, fetchData]);
-
-  return {
-    data,
-    loading,
-    error,
-    initialLoad,
-    refetch: fetchData,
-    refresh,
-    hasData: data.length > 0,
-  };
-}
-
-export function useCachedEmailLogs(options: UseCachedDataOptions = {}) {
-  const { autoFetch = true, refreshOnMount = false } = options;
-
-  const [data, setData] = useState<EmailLog[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const fetchingRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  const fetchData = useCallback(
-    async (forceRefresh = false) => {
-      if (fetchingRef.current) return;
-
-      try {
-        fetchingRef.current = true;
-        setError(null);
-
-        const hasValidCache = dataCache.hasValidEmailLogsCache();
-
-        if (
-          initialLoad ||
-          forceRefresh ||
-          (!hasValidCache && data.length === 0)
-        ) {
-          setLoading(true);
-        }
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timeout")), 15000)
-        );
-
-        const dataPromise = forceRefresh
-          ? dataCache.refreshEmailLogs()
-          : dataCache.getEmailLogs();
-
-        const emailLogs = await Promise.race([dataPromise, timeoutPromise]);
-
-        if (mountedRef.current) {
-          const emailLogsArray = emailLogs as EmailLog[];
-          setData(emailLogsArray);
-          setInitialLoad(false);
-        }
-      } catch (err) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to load email logs";
-
-        if (
-          errorMessage.includes("Auth session missing") ||
-          errorMessage.includes("session not found") ||
-          errorMessage.includes("No session")
-        ) {
-          setData([]);
-          setError(null);
-        } else {
-          setError(errorMessage);
-          if (data.length === 0) {
-            setData([]);
-          }
-        }
-        setInitialLoad(false);
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-        fetchingRef.current = false;
-      }
-    },
-    [data.length, initialLoad]
-  );
-
-  const refresh = useCallback(async () => {
-    return fetchData(true);
-  }, [fetchData]);
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    if (autoFetch) {
-      fetchData(refreshOnMount);
-    }
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [autoFetch, refreshOnMount, fetchData]);
-
-  return {
-    data,
-    loading,
-    error,
-    initialLoad,
-    refetch: fetchData,
-    refresh,
-    hasData: data.length > 0,
-  };
-}
-
-export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
-  const { autoFetch = true, refreshOnMount = false } = options;
-
-  const [data, setData] = useState<CampaignProgress | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const fetchingRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  const fetchData = useCallback(
-    async (forceRefresh = false) => {
-      if (fetchingRef.current) return;
-
-      try {
-        fetchingRef.current = true;
-        setError(null);
-
-        const hasValidCache = dataCache.hasValidCampaignProgressCache();
-
-        if (initialLoad || forceRefresh || (!hasValidCache && data === null)) {
-          setLoading(true);
-        }
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timeout")), 15000)
-        );
-
-        const dataPromise = forceRefresh
-          ? dataCache.refreshCampaignProgress()
-          : dataCache.getCampaignProgress();
-
-        const campaignProgress = await Promise.race([
-          dataPromise,
-          timeoutPromise,
-        ]);
-
-        if (mountedRef.current) {
-          setData(campaignProgress as CampaignProgress | null);
+          setData(result as T);
           setInitialLoad(false);
         }
       } catch (err) {
@@ -372,19 +91,20 @@ export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
         const errorMessage =
           err instanceof Error
             ? err.message
-            : "Failed to load campaign progress";
+            : `Failed to load ${errorMessagePrefix}`;
 
+        // Don't show errors for auth-related issues during sign out
         if (
           errorMessage.includes("Auth session missing") ||
           errorMessage.includes("session not found") ||
           errorMessage.includes("No session")
         ) {
-          setData(null);
+          setData(emptyValue);
           setError(null);
         } else {
           setError(errorMessage);
-          if (data === null) {
-            setData(null);
+          if (JSON.stringify(data) === JSON.stringify(emptyValue)) {
+            setData(emptyValue);
           }
         }
         setInitialLoad(false);
@@ -395,7 +115,14 @@ export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
         fetchingRef.current = false;
       }
     },
-    [data, initialLoad]
+    [
+      cacheMethod,
+      refreshMethod,
+      hasValidCacheMethod,
+      emptyValue,
+      errorMessagePrefix,
+      // Remove 'data' and 'initialLoad' to prevent infinite re-renders
+    ]
   );
 
   const refresh = useCallback(async () => {
@@ -412,7 +139,7 @@ export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
     return () => {
       mountedRef.current = false;
     };
-  }, [autoFetch, refreshOnMount, fetchData]);
+  }, [autoFetch, refreshOnMount]); // Remove fetchData dependency to prevent infinite re-renders
 
   return {
     data,
@@ -421,121 +148,93 @@ export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
     initialLoad,
     refetch: fetchData,
     refresh,
-    hasData: data !== null,
+    hasData: JSON.stringify(data) !== JSON.stringify(emptyValue),
   };
 }
 
-export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
-  const { autoFetch = true, refreshOnMount = false } = options;
-
-  const [data, setData] = useState<DashboardStats>({
-    totalProperties: 0,
-    totalEmailsSent: 0,
-    totalReplies: 0,
-    replyRate: 0,
-    currentWeek: 1,
-    activeTemplates: 0,
-    weeklyStats: [],
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const fetchingRef = useRef(false);
-  const mountedRef = useRef(true);
-
-  const fetchData = useCallback(
-    async (forceRefresh = false) => {
-      if (fetchingRef.current) return;
-
-      try {
-        fetchingRef.current = true;
-        setError(null);
-
-        const hasValidCache = dataCache.hasValidDashboardStatsCache();
-
-        if (
-          initialLoad ||
-          forceRefresh ||
-          (!hasValidCache && data.totalProperties === 0)
-        ) {
-          setLoading(true);
-        }
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Request timeout")), 15000)
-        );
-
-        const dataPromise = forceRefresh
-          ? dataCache.refreshDashboardStats()
-          : dataCache.getDashboardStats();
-
-        const dashboardStats = await Promise.race([
-          dataPromise,
-          timeoutPromise,
-        ]);
-
-        if (mountedRef.current) {
-          setData(dashboardStats as DashboardStats);
-          setInitialLoad(false);
-        }
-      } catch (err) {
-        if (!mountedRef.current) return;
-
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to load dashboard stats";
-
-        if (
-          errorMessage.includes("Auth session missing") ||
-          errorMessage.includes("session not found") ||
-          errorMessage.includes("No session")
-        ) {
-          setData({
-            totalProperties: 0,
-            totalEmailsSent: 0,
-            totalReplies: 0,
-            replyRate: 0,
-            currentWeek: 1,
-            activeTemplates: 0,
-            weeklyStats: [],
-          });
-          setError(null);
-        } else {
-          setError(errorMessage);
-        }
-        setInitialLoad(false);
-      } finally {
-        if (mountedRef.current) {
-          setLoading(false);
-        }
-        fetchingRef.current = false;
-      }
-    },
-    [data.totalProperties, initialLoad]
+export function useCachedProperties(options: UseCachedDataOptions = {}) {
+  const config = useMemo(
+    () => ({
+      cacheMethod: () => dataCache.getProperties(),
+      refreshMethod: () => dataCache.refreshProperties(),
+      hasValidCacheMethod: () => dataCache.hasValidPropertiesCache(),
+      emptyValue: [],
+      errorMessagePrefix: "properties",
+    }),
+    []
   );
 
-  const refresh = useCallback(async () => {
-    return fetchData(true);
-  }, [fetchData]);
+  return useGenericCachedData<Property[]>(config, options);
+}
 
-  useEffect(() => {
-    mountedRef.current = true;
+export function useCachedEmailTemplates(options: UseCachedDataOptions = {}) {
+  const config = useMemo(
+    () => ({
+      cacheMethod: () => dataCache.getEmailTemplates(),
+      refreshMethod: () => dataCache.refreshEmailTemplates(),
+      hasValidCacheMethod: () => dataCache.hasValidEmailTemplatesCache(),
+      emptyValue: [],
+      errorMessagePrefix: "email templates",
+    }),
+    []
+  );
 
-    if (autoFetch) {
-      fetchData(refreshOnMount);
-    }
+  return useGenericCachedData<EmailTemplate[]>(config, options);
+}
 
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [autoFetch, refreshOnMount, fetchData]);
+export function useCachedEmailLogs(options: UseCachedDataOptions = {}) {
+  const config = useMemo(
+    () => ({
+      cacheMethod: () => dataCache.getEmailLogs(),
+      refreshMethod: () => dataCache.refreshEmailLogs(),
+      hasValidCacheMethod: () => dataCache.hasValidEmailLogsCache(),
+      emptyValue: [],
+      errorMessagePrefix: "email logs",
+    }),
+    []
+  );
 
-  return {
-    data,
-    loading,
-    error,
-    initialLoad,
-    refetch: fetchData,
-    refresh,
-    hasData: data.totalProperties > 0 || data.totalEmailsSent > 0,
-  };
+  return useGenericCachedData<EmailLog[]>(config, options);
+}
+
+export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
+  const config = useMemo(
+    () => ({
+      cacheMethod: () => dataCache.getCampaignProgress(),
+      refreshMethod: () => dataCache.refreshCampaignProgress(),
+      hasValidCacheMethod: () => dataCache.hasValidCampaignProgressCache(),
+      emptyValue: null,
+      errorMessagePrefix: "campaign progress",
+    }),
+    []
+  );
+
+  return useGenericCachedData<CampaignProgress | null>(config, options);
+}
+
+export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
+  const emptyStats = useMemo(
+    () => ({
+      totalProperties: 0,
+      totalEmailsSent: 0,
+      totalReplies: 0,
+      replyRate: 0,
+      currentWeek: 1,
+      activeTemplates: 0,
+    }),
+    []
+  );
+
+  const config = useMemo(
+    () => ({
+      cacheMethod: () => dataCache.getDashboardStats(),
+      refreshMethod: () => dataCache.refreshDashboardStats(),
+      hasValidCacheMethod: () => dataCache.hasValidDashboardStatsCache(),
+      emptyValue: emptyStats,
+      errorMessagePrefix: "dashboard stats",
+    }),
+    [emptyStats]
+  );
+
+  return useGenericCachedData<DashboardStats>(config, options);
 }

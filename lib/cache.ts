@@ -5,7 +5,6 @@ import type {
   EmailLog,
   CampaignProgress,
   DashboardStats,
-  WeeklyStats,
 } from "@/lib/types";
 
 interface CacheEntry<T> {
@@ -34,6 +33,16 @@ class DataCache {
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   private supabase = createClient();
   private currentUserId: string | null = null;
+
+  constructor() {
+    console.log(
+      `🚀 [CACHE INIT] Data cache system initialized (duration: ${
+        this.CACHE_DURATION / 1000
+      }s)`
+    );
+  }
+  private userIdCacheTimestamp: number = 0;
+  private readonly USER_ID_CACHE_DURATION = 60 * 1000; // Cache user ID for 1 minute
   private fetchingProperties = false;
   private fetchingEmailTemplates = false;
   private fetchingEmailLogs = false;
@@ -50,8 +59,84 @@ class DataCache {
     return entry.userId === this.currentUserId;
   }
 
+  // Unified cache validation helper to reduce redundant code
+  private isValidCache<T>(entry: CacheEntry<T> | null): boolean {
+    return entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
+  }
+
+  // Generic data fetcher to reduce redundant code patterns
+  private async fetchWithCache<T>(
+    cacheKey: keyof CacheStore,
+    fetchingFlag: string,
+    fetcher: () => Promise<T>,
+    emptyValue: T
+  ): Promise<T> {
+    try {
+      const userId = await this.ensureUserContext(); // Use shared user context
+      if (!userId) {
+        return emptyValue;
+      }
+
+      const entry = this.cache[cacheKey] as CacheEntry<T> | null;
+
+      // Check if cache exists and is valid
+      if (this.isValidCache(entry)) {
+        console.log(
+          `🟢 [CACHE HIT] Retrieved ${cacheKey} from cache (age: ${Math.floor(
+            (Date.now() - entry!.timestamp) / 1000
+          )}s)`
+        );
+        return entry!.data;
+      }
+
+      // Prevent concurrent fetches
+      const fetchingKey = `fetching${fetchingFlag}` as keyof this;
+      if (this[fetchingKey] as boolean) {
+        console.log(
+          `⏳ [CACHE WAIT] Waiting for concurrent ${cacheKey} fetch to complete`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        return this.fetchWithCache(cacheKey, fetchingFlag, fetcher, emptyValue);
+      }
+
+      (this[fetchingKey] as any) = true;
+      console.log(`🔄 [DATABASE FETCH] Fetching ${cacheKey} from database...`);
+
+      try {
+        const data = await fetcher();
+
+        // Cache the result
+        (this.cache[cacheKey] as any) = {
+          data,
+          timestamp: Date.now(),
+          userId,
+        };
+
+        console.log(
+          `✅ [DATABASE FETCH COMPLETE] ${cacheKey} fetched and cached successfully`
+        );
+        return data;
+      } finally {
+        (this[fetchingKey] as any) = false;
+      }
+    } catch (error) {
+      console.error(`Error in fetch${fetchingFlag}:`, error);
+      const entry = this.cache[cacheKey] as CacheEntry<T> | null;
+      return entry?.data || emptyValue;
+    }
+  }
+
   async getCurrentUserId(): Promise<string | null> {
     try {
+      // Return cached user ID if still valid
+      const now = Date.now();
+      if (
+        this.currentUserId &&
+        now - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
+      ) {
+        return this.currentUserId;
+      }
+
       // Check if we have a session first
       const {
         data: { session },
@@ -60,6 +145,7 @@ class DataCache {
 
       if (sessionError || !session) {
         this.currentUserId = null;
+        this.userIdCacheTimestamp = 0;
         return null;
       }
 
@@ -70,15 +156,65 @@ class DataCache {
 
       if (error || !user) {
         this.currentUserId = null;
+        this.userIdCacheTimestamp = 0;
         return null;
       }
 
       this.currentUserId = user.id;
+      this.userIdCacheTimestamp = now;
       return this.currentUserId;
     } catch (error) {
       // Silently handle auth errors during sign out
       this.currentUserId = null;
+      this.userIdCacheTimestamp = 0;
       return null;
+    }
+  }
+
+  // Batch initialize user context to avoid multiple getUserId calls
+  private initializingUser = false;
+
+  private async ensureUserContext(): Promise<string | null> {
+    if (
+      this.currentUserId &&
+      Date.now() - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
+    ) {
+      console.log(
+        `🟢 [USER ID CACHE HIT] Using cached user ID (age: ${Math.floor(
+          (Date.now() - this.userIdCacheTimestamp) / 1000
+        )}s)`
+      );
+      return this.currentUserId;
+    }
+
+    // If already initializing, wait for it to complete
+    if (this.initializingUser) {
+      console.log(
+        `⏳ [USER ID WAIT] Waiting for concurrent user ID fetch to complete`
+      );
+      let attempts = 0;
+      while (this.initializingUser && attempts < 50) {
+        // Max 5 second wait
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        attempts++;
+      }
+      return this.currentUserId;
+    }
+
+    this.initializingUser = true;
+    console.log(`🔄 [USER ID FETCH] Fetching user ID from auth...`);
+    try {
+      const userId = await this.getCurrentUserId();
+      if (userId) {
+        console.log(
+          `✅ [USER ID FETCH COMPLETE] User ID fetched and cached successfully`
+        );
+      } else {
+        console.log(`❌ [USER ID FETCH FAILED] No authenticated user found`);
+      }
+      return userId;
+    } finally {
+      this.initializingUser = false;
     }
   }
 
@@ -88,503 +224,368 @@ class DataCache {
   }
 
   async getProperties(): Promise<Property[]> {
-    try {
-      const userId = await this.getCurrentUserId();
-      if (!userId) {
-        // Silently return empty array when not authenticated
-        return [];
-      }
+    return this.fetchWithCache(
+      "properties",
+      "Properties",
+      async () => {
+        const { data, error } = await this.supabase
+          .from("properties")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      const entry = this.cache.properties;
+        if (error) {
+          throw new Error(error.message);
+        }
 
-      // Check if cache exists and is valid
-      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        return entry.data;
-      }
-
-      // Prevent concurrent fetches
-      if (this.fetchingProperties) {
-        // Wait for current fetch to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return this.getProperties(); // Recursive call to check cache again
-      }
-
-      this.fetchingProperties = true;
-
-      // Fetch fresh data
-      const { data, error } = await this.supabase
-        .from("properties")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        this.fetchingProperties = false;
-        return entry?.data || []; // Return cached data if available
-      }
-
-      // Cache the result
-      this.cache.properties = {
-        data: data || [],
-        timestamp: Date.now(),
-        userId,
-      };
-
-      this.fetchingProperties = false;
-      return data || [];
-    } catch (error) {
-      console.error("Error in getProperties:", error);
-      this.fetchingProperties = false;
-      // Return cached data if available, otherwise empty array
-      return this.cache.properties?.data || [];
-    }
+        return data || [];
+      },
+      []
+    );
   }
 
   async getEmailTemplates(): Promise<EmailTemplate[]> {
-    try {
-      const userId = await this.getCurrentUserId();
-      if (!userId) {
-        console.warn(
-          "User not authenticated, returning empty email templates array"
-        );
-        return [];
-      }
+    return this.fetchWithCache(
+      "emailTemplates",
+      "EmailTemplates",
+      async () => {
+        const { data, error } = await this.supabase
+          .from("email_templates")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      const entry = this.cache.emailTemplates;
+        if (error) {
+          console.error("Error fetching email templates:", error);
+          throw new Error(error.message);
+        }
 
-      // Check if cache exists and is valid
-      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        return entry.data;
-      }
-
-      // Prevent concurrent fetches
-      if (this.fetchingEmailTemplates) {
-        // Wait for current fetch to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return this.getEmailTemplates(); // Recursive call to check cache again
-      }
-
-      this.fetchingEmailTemplates = true;
-
-      // Fetch fresh data
-      const { data, error } = await this.supabase
-        .from("email_templates")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (error) {
-        console.error("Error fetching email templates:", error);
-        this.fetchingEmailTemplates = false;
-        return entry?.data || []; // Return cached data if available
-      }
-
-      // Cache the result
-      this.cache.emailTemplates = {
-        data: data || [],
-        timestamp: Date.now(),
-        userId,
-      };
-
-      this.fetchingEmailTemplates = false;
-      return data || [];
-    } catch (error) {
-      console.error("Error in getEmailTemplates:", error);
-      this.fetchingEmailTemplates = false;
-      // Return cached data if available, otherwise empty array
-      return this.cache.emailTemplates?.data || [];
-    }
+        return data || [];
+      },
+      []
+    );
   }
 
   async getEmailLogs(): Promise<EmailLog[]> {
-    try {
-      const userId = await this.getCurrentUserId();
-      if (!userId) {
-        console.warn(
-          "User not authenticated, returning empty email logs array"
-        );
-        return [];
-      }
-
-      const entry = this.cache.emailLogs;
-
-      // Check if cache exists and is valid
-      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        return entry.data;
-      }
-
-      // Prevent concurrent fetches
-      if (this.fetchingEmailLogs) {
-        // Wait for current fetch to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return this.getEmailLogs(); // Recursive call to check cache again
-      }
-
-      this.fetchingEmailLogs = true;
-
-      // Fetch email logs with related data using joins
-      const { data, error } = await this.supabase
-        .from("email_logs")
-        .select(
+    return this.fetchWithCache(
+      "emailLogs",
+      "EmailLogs",
+      async () => {
+        const { data, error } = await this.supabase
+          .from("email_logs")
+          .select(
+            `
+            *,
+            properties(
+              id,
+              property_address,
+              decision_maker_name,
+              decision_maker_email,
+              state,
+              city,
+              county,
+              zip_code
+            ),
+            email_templates(
+              id,
+              template_name
+            )
           `
-          *,
-          properties(
-            id,
-            property_address,
-            decision_maker_name,
-            decision_maker_email,
-            state,
-            city,
-            county,
-            zip_code
-          ),
-          email_templates(
-            id,
-            template_name,
-            subject
           )
-        `
-        )
-        .order("sent_at", { ascending: false });
+          .order("sent_at", { ascending: false });
 
-      if (error) {
-        console.error("Error fetching email logs:", error);
-        this.fetchingEmailLogs = false;
-        return entry?.data || [];
-      }
+        if (error) {
+          console.error("Error fetching email logs:", error);
+          throw new Error(error.message);
+        }
 
-      // Cache the result
-      this.cache.emailLogs = {
-        data: data || [],
-        timestamp: Date.now(),
-        userId,
-      };
-
-      this.fetchingEmailLogs = false;
-      return data || [];
-    } catch (error) {
-      console.error("Error in getEmailLogs:", {
-        error,
-        message: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-      this.fetchingEmailLogs = false;
-      // Return cached data if available, otherwise empty array
-      return this.cache.emailLogs?.data || [];
-    }
+        return data || [];
+      },
+      []
+    );
   }
 
   async getCampaignProgress(): Promise<CampaignProgress | null> {
-    try {
-      const userId = await this.getCurrentUserId();
-      if (!userId) {
-        console.warn(
-          "User not authenticated, returning null campaign progress"
-        );
-        return null;
-      }
+    return this.fetchWithCache(
+      "campaignProgress",
+      "CampaignProgress",
+      async () => {
+        const { data, error } = await this.supabase
+          .from("campaign_progress")
+          .select("*")
+          .order("id", { ascending: false })
+          .limit(1);
 
-      const entry = this.cache.campaignProgress;
+        if (error) {
+          console.error("Error fetching campaign progress:", error);
+          throw new Error(error.message);
+        }
 
-      // Check if cache exists and is valid
-      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        return entry.data;
-      }
-
-      // Prevent concurrent fetches
-      if (this.fetchingCampaignProgress) {
-        // Wait for current fetch to complete
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return this.getCampaignProgress(); // Recursive call to check cache again
-      }
-
-      this.fetchingCampaignProgress = true;
-
-      // Fetch fresh data
-      const { data, error } = await this.supabase
-        .from("campaign_progress")
-        .select("*")
-        .order("id", { ascending: false })
-        .limit(1); // Assuming we only need the latest progress
-
-      if (error) {
-        console.error("Error fetching campaign progress:", error);
-        this.fetchingCampaignProgress = false;
-        return entry?.data || null; // Return cached data if available
-      }
-
-      // Cache the result
-      this.cache.campaignProgress = {
-        data: data ? data[0] : null, // Extract the single object from the array
-        timestamp: Date.now(),
-        userId,
-      };
-
-      this.fetchingCampaignProgress = false;
-      return data ? data[0] : null;
-    } catch (error) {
-      console.error("Error in getCampaignProgress:", error);
-      this.fetchingCampaignProgress = false;
-      // Return cached data if available, otherwise null
-      return this.cache.campaignProgress?.data || null;
-    }
+        return data ? data[0] : null;
+      },
+      null
+    );
   }
 
   async getDashboardStats(): Promise<DashboardStats> {
-    try {
-      const userId = await this.getCurrentUserId();
-      if (!userId) {
+    return this.fetchWithCache(
+      "dashboardStats",
+      "DashboardStats",
+      async () => {
+        // Try to use cached data first to avoid duplicate requests
+        // Get cached user ID once (already cached from fetchWithCache call)
+        let properties: Property[] = [];
+        let emailLogs: EmailLog[] = [];
+        let campaignProgress: CampaignProgress | null = null;
+        let emailTemplates: EmailTemplate[] = [];
+
+        // Use cached data if available and valid
+        const propertiesEntry = this.cache.properties;
+        const emailLogsEntry = this.cache.emailLogs;
+        const campaignProgressEntry = this.cache.campaignProgress;
+        const emailTemplatesEntry = this.cache.emailTemplates;
+
+        const needsProperties = !this.isValidCache(propertiesEntry);
+        const needsEmailLogs = !this.isValidCache(emailLogsEntry);
+        const needsCampaignProgress = !this.isValidCache(campaignProgressEntry);
+        const needsEmailTemplates = !this.isValidCache(emailTemplatesEntry);
+
+        console.log(
+          `📊 [DASHBOARD STATS] Cache status - Properties: ${
+            needsProperties ? "🔄 fetch" : "🟢 cached"
+          }, EmailLogs: ${
+            needsEmailLogs ? "🔄 fetch" : "🟢 cached"
+          }, CampaignProgress: ${
+            needsCampaignProgress ? "🔄 fetch" : "🟢 cached"
+          }, EmailTemplates: ${needsEmailTemplates ? "🔄 fetch" : "🟢 cached"}`
+        );
+
+        // Use cached data when available
+        if (!needsProperties) {
+          properties = propertiesEntry!.data;
+        }
+        if (!needsEmailLogs) {
+          emailLogs = emailLogsEntry!.data;
+        }
+        if (!needsCampaignProgress) {
+          campaignProgress = campaignProgressEntry!.data;
+        }
+        if (!needsEmailTemplates) {
+          emailTemplates = emailTemplatesEntry!.data;
+        }
+
+        // Fetch missing data only (optimized queries for stats)
+        if (needsProperties) {
+          console.log(
+            `🔄 [DASHBOARD STATS] Fetching properties count from database...`
+          );
+          const { data: propertiesData, error: propertiesError } =
+            await this.supabase
+              .from("properties")
+              .select("id")
+              .order("created_at", { ascending: false });
+
+          if (!propertiesError && propertiesData) {
+            properties = propertiesData as any[]; // Only need count
+          }
+        }
+
+        if (needsEmailLogs) {
+          console.log(
+            `🔄 [DASHBOARD STATS] Fetching email logs from database...`
+          );
+          const { data: emailLogsData, error: emailLogsError } =
+            await this.supabase
+              .from("email_logs")
+              .select("id, campaign_week, replied, sent_at");
+
+          if (!emailLogsError && emailLogsData) {
+            emailLogs = emailLogsData as EmailLog[];
+          }
+        }
+
+        if (needsCampaignProgress) {
+          console.log(
+            `🔄 [DASHBOARD STATS] Fetching campaign progress from database...`
+          );
+          const { data: campaignProgressData, error: campaignProgressError } =
+            await this.supabase
+              .from("campaign_progress")
+              .select("*")
+              .order("id", { ascending: false })
+              .limit(1);
+
+          if (!campaignProgressError) {
+            campaignProgress =
+              campaignProgressData && campaignProgressData.length > 0
+                ? campaignProgressData[0]
+                : null;
+          }
+        }
+
+        if (needsEmailTemplates) {
+          console.log(
+            `🔄 [DASHBOARD STATS] Fetching email templates from database...`
+          );
+          const { data: emailTemplatesData, error: emailTemplatesError } =
+            await this.supabase.from("email_templates").select("id, is_active");
+
+          if (!emailTemplatesError && emailTemplatesData) {
+            emailTemplates = emailTemplatesData as EmailTemplate[];
+          }
+        }
+
+        // Calculate stats from the data (cached or fresh)
+        const totalProperties = properties.length;
+        const totalEmailsSent = emailLogs.length;
+        const totalReplies = emailLogs.filter((log) => log.replied).length;
+        const replyRate =
+          totalEmailsSent > 0 ? (totalReplies / totalEmailsSent) * 100 : 0;
+        const currentWeek = campaignProgress?.current_week || 1;
+        const activeTemplates = emailTemplates.filter(
+          (t) => t.is_active
+        ).length;
+
+        console.log(
+          `📊 [DASHBOARD STATS COMPLETE] Calculated stats - Properties: ${totalProperties}, Emails: ${totalEmailsSent}, Replies: ${totalReplies}, Active Templates: ${activeTemplates}`
+        );
+
         return {
-          totalProperties: 0,
-          totalEmailsSent: 0,
-          totalReplies: 0,
-          replyRate: 0,
-          currentWeek: 1,
-          activeTemplates: 0,
-          weeklyStats: [],
+          totalProperties,
+          totalEmailsSent,
+          totalReplies,
+          replyRate,
+          currentWeek,
+          activeTemplates,
         };
-      }
-
-      const entry = this.cache.dashboardStats;
-
-      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
-        return entry.data;
-      }
-
-      if (this.fetchingDashboardStats) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return this.getDashboardStats();
-      }
-
-      this.fetchingDashboardStats = true;
-
-      // Try to use cached data first to avoid duplicate requests
-      let properties: Property[] = [];
-      let emailLogs: EmailLog[] = [];
-      let campaignProgress: CampaignProgress | null = null;
-      let emailTemplates: EmailTemplate[] = [];
-
-      // Use cached data if available and valid
-      const propertiesEntry = this.cache.properties;
-      const emailLogsEntry = this.cache.emailLogs;
-      const campaignProgressEntry = this.cache.campaignProgress;
-      const emailTemplatesEntry = this.cache.emailTemplates;
-
-      const needsProperties =
-        !propertiesEntry ||
-        this.isExpired(propertiesEntry) ||
-        !this.isSameUser(propertiesEntry);
-      const needsEmailLogs =
-        !emailLogsEntry ||
-        this.isExpired(emailLogsEntry) ||
-        !this.isSameUser(emailLogsEntry);
-      const needsCampaignProgress =
-        !campaignProgressEntry ||
-        this.isExpired(campaignProgressEntry) ||
-        !this.isSameUser(campaignProgressEntry);
-      const needsEmailTemplates =
-        !emailTemplatesEntry ||
-        this.isExpired(emailTemplatesEntry) ||
-        !this.isSameUser(emailTemplatesEntry);
-
-      // Use cached data when available
-      if (!needsProperties) {
-        properties = propertiesEntry.data;
-      }
-      if (!needsEmailLogs) {
-        emailLogs = emailLogsEntry.data;
-      }
-      if (!needsCampaignProgress) {
-        campaignProgress = campaignProgressEntry.data;
-      }
-      if (!needsEmailTemplates) {
-        emailTemplates = emailTemplatesEntry.data;
-      }
-
-      // Fetch missing data only
-      if (needsProperties) {
-        // For stats, we only need count, so we can just get IDs
-        const { data: propertiesData, error: propertiesError } =
-          await this.supabase
-            .from("properties")
-            .select("id")
-            .order("created_at", { ascending: false });
-
-        if (!propertiesError && propertiesData) {
-          // For stats calculation, we only need the count
-          properties = propertiesData as any[]; // Use as any[] since we only need length
-        }
-      }
-
-      if (needsEmailLogs) {
-        const { data: emailLogsData, error: emailLogsError } =
-          await this.supabase
-            .from("email_logs")
-            .select("id, campaign_week, replied, sent_at");
-
-        if (!emailLogsError && emailLogsData) {
-          // For stats calculation, we only need these fields
-          emailLogs = emailLogsData as EmailLog[];
-        }
-      }
-
-      if (needsCampaignProgress) {
-        const { data: campaignProgressData, error: campaignProgressError } =
-          await this.supabase
-            .from("campaign_progress")
-            .select("*")
-            .order("id", { ascending: false })
-            .limit(1);
-
-        if (!campaignProgressError) {
-          campaignProgress =
-            campaignProgressData && campaignProgressData.length > 0
-              ? campaignProgressData[0]
-              : null;
-          // Update cache for future use
-          this.cache.campaignProgress = {
-            data: campaignProgress,
-            timestamp: Date.now(),
-            userId,
-          };
-        }
-      }
-
-      if (needsEmailTemplates) {
-        const { data: emailTemplatesData, error: emailTemplatesError } =
-          await this.supabase
-            .from("email_templates")
-            .select("id, is_active")
-            .eq("is_active", true);
-
-        if (!emailTemplatesError && emailTemplatesData) {
-          // For stats calculation, we only need these fields
-          emailTemplates = emailTemplatesData as EmailTemplate[];
-        }
-      }
-
-      // Calculate stats from the data (cached or fresh)
-      const totalProperties = properties.length;
-      const totalEmailsSent = emailLogs.length;
-      const totalReplies = emailLogs.filter((log) => log.replied).length;
-      const replyRate =
-        totalEmailsSent > 0 ? (totalReplies / totalEmailsSent) * 100 : 0;
-      const currentWeek = campaignProgress?.current_week || 1;
-      const activeTemplates = emailTemplates.filter((t) => t.is_active).length;
-
-      // Calculate weekly stats
-      const weeklyStatsMap = new Map<
-        number,
-        { sent: number; replies: number }
-      >();
-
-      emailLogs.forEach((log) => {
-        const week = log.campaign_week;
-        if (!weeklyStatsMap.has(week)) {
-          weeklyStatsMap.set(week, { sent: 0, replies: 0 });
-        }
-        const stats = weeklyStatsMap.get(week)!;
-        stats.sent++;
-        if (log.replied) {
-          stats.replies++;
-        }
-      });
-
-      const weeklyStats = Array.from(weeklyStatsMap.entries())
-        .map(([week, stats]) => ({
-          week,
-          emailsSent: stats.sent,
-          replies: stats.replies,
-          replyRate: stats.sent > 0 ? (stats.replies / stats.sent) * 100 : 0,
-          date: `Week ${week}`,
-        }))
-        .sort((a, b) => a.week - b.week);
-
-      const dashboardStats: DashboardStats = {
-        totalProperties,
-        totalEmailsSent,
-        totalReplies,
-        replyRate,
-        currentWeek,
-        activeTemplates,
-        weeklyStats,
-      };
-
-      this.cache.dashboardStats = {
-        data: dashboardStats,
-        timestamp: Date.now(),
-        userId,
-      };
-
-      this.fetchingDashboardStats = false;
-      return dashboardStats;
-    } catch (error) {
-      console.error("Error in getDashboardStats:", error);
-      this.fetchingDashboardStats = false;
-      return (
-        this.cache.dashboardStats?.data || {
-          totalProperties: 0,
-          totalEmailsSent: 0,
-          totalReplies: 0,
-          replyRate: 0,
-          currentWeek: 1,
-          activeTemplates: 0,
-          weeklyStats: [],
-        }
-      );
-    }
-  }
-
-  // Safe methods that check authentication first
-  async safeGetProperties(): Promise<Property[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.getProperties();
-  }
-
-  async safeGetEmailTemplates(): Promise<EmailTemplate[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.getEmailTemplates();
-  }
-
-  async safeGetEmailLogs(): Promise<EmailLog[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.getEmailLogs();
-  }
-
-  async safeGetCampaignProgress(): Promise<CampaignProgress | null> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return null;
-    }
-    return this.getCampaignProgress();
-  }
-
-  async safeGetDashboardStats(): Promise<DashboardStats> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return {
+      },
+      {
         totalProperties: 0,
         totalEmailsSent: 0,
         totalReplies: 0,
         replyRate: 0,
         currentWeek: 1,
         activeTemplates: 0,
-        weeklyStats: [],
-      };
+      }
+    );
+  }
+
+  // Generic safe method to reduce code duplication
+  private async safeMethod<T>(
+    method: () => Promise<T>,
+    emptyValue: T
+  ): Promise<T> {
+    const isAuth = await this.isUserAuthenticated();
+    if (!isAuth) {
+      return emptyValue;
     }
-    return this.getDashboardStats();
+    return method();
+  }
+
+  // Safe methods that check authentication first
+  async safeGetProperties(): Promise<Property[]> {
+    return this.safeMethod(() => this.getProperties(), []);
+  }
+
+  async safeGetEmailTemplates(): Promise<EmailTemplate[]> {
+    return this.safeMethod(() => this.getEmailTemplates(), []);
+  }
+
+  async safeGetEmailLogs(): Promise<EmailLog[]> {
+    return this.safeMethod(() => this.getEmailLogs(), []);
+  }
+
+  async safeGetCampaignProgress(): Promise<CampaignProgress | null> {
+    return this.safeMethod(() => this.getCampaignProgress(), null);
+  }
+
+  async safeGetDashboardStats(): Promise<DashboardStats> {
+    return this.safeMethod(() => this.getDashboardStats(), {
+      totalProperties: 0,
+      totalEmailsSent: 0,
+      totalReplies: 0,
+      replyRate: 0,
+      currentWeek: 1,
+      activeTemplates: 0,
+    });
+  }
+
+  // Update cache directly instead of invalidating (more efficient)
+  updateEmailTemplateInCache(updatedTemplate: EmailTemplate): void {
+    try {
+      const entry = this.cache.emailTemplates;
+      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        console.log(
+          `🔄 [CACHE UPDATE] Email template updated in cache (ID: ${updatedTemplate.id})`
+        );
+        const updatedData = entry.data.map((template) =>
+          template.id === updatedTemplate.id ? updatedTemplate : template
+        );
+        this.cache.emailTemplates = {
+          ...entry,
+          data: updatedData,
+          timestamp: Date.now(), // Update timestamp
+        };
+      } else {
+        console.log(
+          `⚠️ [CACHE UPDATE] Email template cache invalid, update skipped (ID: ${updatedTemplate.id})`
+        );
+      }
+    } catch (error) {
+      console.error("Error updating email template in cache:", error);
+    }
+  }
+
+  addEmailTemplateToCache(newTemplate: EmailTemplate): void {
+    try {
+      const entry = this.cache.emailTemplates;
+      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        console.log(
+          `➕ [CACHE ADD] Email template added to cache (ID: ${newTemplate.id})`
+        );
+        const updatedData = [newTemplate, ...entry.data];
+        this.cache.emailTemplates = {
+          ...entry,
+          data: updatedData,
+          timestamp: Date.now(), // Update timestamp
+        };
+      } else {
+        console.log(
+          `⚠️ [CACHE ADD] Email template cache invalid, add skipped (ID: ${newTemplate.id})`
+        );
+      }
+    } catch (error) {
+      console.error("Error adding email template to cache:", error);
+    }
+  }
+
+  removeEmailTemplateFromCache(templateId: number): void {
+    try {
+      const entry = this.cache.emailTemplates;
+      if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
+        console.log(
+          `🗑️ [CACHE REMOVE] Email template removed from cache (ID: ${templateId})`
+        );
+        const updatedData = entry.data.filter(
+          (template) => template.id !== templateId
+        );
+        this.cache.emailTemplates = {
+          ...entry,
+          data: updatedData,
+          timestamp: Date.now(), // Update timestamp
+        };
+      } else {
+        console.log(
+          `⚠️ [CACHE REMOVE] Email template cache invalid, remove skipped (ID: ${templateId})`
+        );
+      }
+    } catch (error) {
+      console.error("Error removing email template from cache:", error);
+    }
   }
 
   // Invalidate cache when data is modified
   invalidateProperties(): void {
     try {
+      console.log(`🗑️ [CACHE INVALIDATE] Properties cache invalidated`);
       this.cache.properties = null;
     } catch (error) {
       console.error("Error invalidating properties cache:", error);
@@ -593,6 +594,7 @@ class DataCache {
 
   invalidateEmailTemplates(): void {
     try {
+      console.log(`🗑️ [CACHE INVALIDATE] Email templates cache invalidated`);
       this.cache.emailTemplates = null;
     } catch (error) {
       console.error("Error invalidating email templates cache:", error);
@@ -601,6 +603,7 @@ class DataCache {
 
   invalidateEmailLogs(): void {
     try {
+      console.log(`🗑️ [CACHE INVALIDATE] Email logs cache invalidated`);
       this.cache.emailLogs = null;
     } catch (error) {
       console.error("Error invalidating email logs cache:", error);
@@ -609,6 +612,7 @@ class DataCache {
 
   invalidateCampaignProgress(): void {
     try {
+      console.log(`🗑️ [CACHE INVALIDATE] Campaign progress cache invalidated`);
       this.cache.campaignProgress = null;
     } catch (error) {
       console.error("Error invalidating campaign progress cache:", error);
@@ -617,6 +621,7 @@ class DataCache {
 
   invalidateDashboardStats(): void {
     try {
+      console.log(`🗑️ [CACHE INVALIDATE] Dashboard stats cache invalidated`);
       this.cache.dashboardStats = null;
     } catch (error) {
       console.error("Error invalidating dashboard stats cache:", error);
@@ -626,6 +631,7 @@ class DataCache {
   // Clear all cache (e.g., on logout)
   clearAll(): void {
     try {
+      console.log(`🧹 [CACHE CLEAR] All cache cleared (logout/user change)`);
       this.cache = {
         properties: null,
         emailTemplates: null,
@@ -634,6 +640,8 @@ class DataCache {
         dashboardStats: null,
       };
       this.currentUserId = null;
+      this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
+      this.initializingUser = false; // Clear initialization flag
       this.fetchingProperties = false;
       this.fetchingEmailTemplates = false;
       this.fetchingEmailLogs = false;
@@ -699,95 +707,58 @@ class DataCache {
           replyRate: 0,
           currentWeek: 1,
           activeTemplates: 0,
-          weeklyStats: [],
         }
       );
     }
   }
 
-  // Safe refresh methods
+  // Safe refresh methods - using generic safe method
   async safeRefreshProperties(): Promise<Property[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.refreshProperties();
+    return this.safeMethod(() => this.refreshProperties(), []);
   }
 
   async safeRefreshEmailTemplates(): Promise<EmailTemplate[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.refreshEmailTemplates();
+    return this.safeMethod(() => this.refreshEmailTemplates(), []);
   }
 
   async safeRefreshEmailLogs(): Promise<EmailLog[]> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return [];
-    }
-    return this.refreshEmailLogs();
+    return this.safeMethod(() => this.refreshEmailLogs(), []);
   }
 
   async safeRefreshCampaignProgress(): Promise<CampaignProgress | null> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return null;
-    }
-    return this.refreshCampaignProgress();
+    return this.safeMethod(() => this.refreshCampaignProgress(), null);
   }
 
   async safeRefreshDashboardStats(): Promise<DashboardStats> {
-    const isAuth = await this.isUserAuthenticated();
-    if (!isAuth) {
-      return {
-        totalProperties: 0,
-        totalEmailsSent: 0,
-        totalReplies: 0,
-        replyRate: 0,
-        currentWeek: 1,
-        activeTemplates: 0,
-        weeklyStats: [],
-      };
-    }
-    return this.refreshDashboardStats();
+    return this.safeMethod(() => this.refreshDashboardStats(), {
+      totalProperties: 0,
+      totalEmailsSent: 0,
+      totalReplies: 0,
+      replyRate: 0,
+      currentWeek: 1,
+      activeTemplates: 0,
+    });
   }
 
-  // Check if cache has data for current user
+  // Check if cache has data for current user - unified implementation
   hasValidPropertiesCache(): boolean {
-    const entry = this.cache.properties;
-    const isValid =
-      entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    return isValid;
+    return this.isValidCache(this.cache.properties);
   }
 
   hasValidEmailTemplatesCache(): boolean {
-    const entry = this.cache.emailTemplates;
-    const isValid =
-      entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    return isValid;
+    return this.isValidCache(this.cache.emailTemplates);
   }
 
   hasValidEmailLogsCache(): boolean {
-    const entry = this.cache.emailLogs;
-    const isValid =
-      entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    return isValid;
+    return this.isValidCache(this.cache.emailLogs);
   }
 
   hasValidCampaignProgressCache(): boolean {
-    const entry = this.cache.campaignProgress;
-    const isValid =
-      entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    return isValid;
+    return this.isValidCache(this.cache.campaignProgress);
   }
 
   hasValidDashboardStatsCache(): boolean {
-    const entry = this.cache.dashboardStats;
-    const isValid =
-      entry !== null && !this.isExpired(entry) && this.isSameUser(entry);
-    return isValid;
+    return this.isValidCache(this.cache.dashboardStats);
   }
 
   // Check if currently fetching data
@@ -886,6 +857,8 @@ class DataCache {
         dashboardStats: null,
       };
       this.currentUserId = null;
+      this.userIdCacheTimestamp = 0; // Clear user ID cache timestamp
+      this.initializingUser = false; // Clear initialization flag
     }
   }
 }
