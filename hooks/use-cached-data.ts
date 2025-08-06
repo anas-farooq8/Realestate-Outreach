@@ -2,7 +2,13 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { dataCache } from "@/lib/cache";
-import type { Property, EmailTemplate } from "@/lib/types";
+import type {
+  Property,
+  EmailTemplate,
+  EmailLog,
+  CampaignProgress,
+  DashboardStats,
+} from "@/lib/types";
 
 interface UseCachedDataOptions {
   autoFetch?: boolean;
@@ -216,5 +222,320 @@ export function useCachedEmailTemplates(options: UseCachedDataOptions = {}) {
     refetch: fetchData,
     refresh,
     hasData: data.length > 0,
+  };
+}
+
+export function useCachedEmailLogs(options: UseCachedDataOptions = {}) {
+  const { autoFetch = true, refreshOnMount = false } = options;
+
+  const [data, setData] = useState<EmailLog[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const fetchingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const fetchData = useCallback(
+    async (forceRefresh = false) => {
+      if (fetchingRef.current) return;
+
+      try {
+        fetchingRef.current = true;
+        setError(null);
+
+        const hasValidCache = dataCache.hasValidEmailLogsCache();
+
+        if (
+          initialLoad ||
+          forceRefresh ||
+          (!hasValidCache && data.length === 0)
+        ) {
+          setLoading(true);
+        }
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 15000)
+        );
+
+        const dataPromise = forceRefresh
+          ? dataCache.refreshEmailLogs()
+          : dataCache.getEmailLogs();
+
+        const emailLogs = await Promise.race([dataPromise, timeoutPromise]);
+
+        if (mountedRef.current) {
+          const emailLogsArray = emailLogs as EmailLog[];
+          setData(emailLogsArray);
+          setInitialLoad(false);
+        }
+      } catch (err) {
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load email logs";
+
+        if (
+          errorMessage.includes("Auth session missing") ||
+          errorMessage.includes("session not found") ||
+          errorMessage.includes("No session")
+        ) {
+          setData([]);
+          setError(null);
+        } else {
+          setError(errorMessage);
+          if (data.length === 0) {
+            setData([]);
+          }
+        }
+        setInitialLoad(false);
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        fetchingRef.current = false;
+      }
+    },
+    [data.length, initialLoad]
+  );
+
+  const refresh = useCallback(async () => {
+    return fetchData(true);
+  }, [fetchData]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    if (autoFetch) {
+      fetchData(refreshOnMount);
+    }
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [autoFetch, refreshOnMount, fetchData]);
+
+  return {
+    data,
+    loading,
+    error,
+    initialLoad,
+    refetch: fetchData,
+    refresh,
+    hasData: data.length > 0,
+  };
+}
+
+export function useCachedCampaignProgress(options: UseCachedDataOptions = {}) {
+  const { autoFetch = true, refreshOnMount = false } = options;
+
+  const [data, setData] = useState<CampaignProgress | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const fetchingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const fetchData = useCallback(
+    async (forceRefresh = false) => {
+      if (fetchingRef.current) return;
+
+      try {
+        fetchingRef.current = true;
+        setError(null);
+
+        const hasValidCache = dataCache.hasValidCampaignProgressCache();
+
+        if (initialLoad || forceRefresh || (!hasValidCache && data === null)) {
+          setLoading(true);
+        }
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 15000)
+        );
+
+        const dataPromise = forceRefresh
+          ? dataCache.refreshCampaignProgress()
+          : dataCache.getCampaignProgress();
+
+        const campaignProgress = await Promise.race([
+          dataPromise,
+          timeoutPromise,
+        ]);
+
+        if (mountedRef.current) {
+          setData(campaignProgress as CampaignProgress | null);
+          setInitialLoad(false);
+        }
+      } catch (err) {
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to load campaign progress";
+
+        if (
+          errorMessage.includes("Auth session missing") ||
+          errorMessage.includes("session not found") ||
+          errorMessage.includes("No session")
+        ) {
+          setData(null);
+          setError(null);
+        } else {
+          setError(errorMessage);
+          if (data === null) {
+            setData(null);
+          }
+        }
+        setInitialLoad(false);
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        fetchingRef.current = false;
+      }
+    },
+    [data, initialLoad]
+  );
+
+  const refresh = useCallback(async () => {
+    return fetchData(true);
+  }, [fetchData]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    if (autoFetch) {
+      fetchData(refreshOnMount);
+    }
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [autoFetch, refreshOnMount, fetchData]);
+
+  return {
+    data,
+    loading,
+    error,
+    initialLoad,
+    refetch: fetchData,
+    refresh,
+    hasData: data !== null,
+  };
+}
+
+export function useCachedDashboardStats(options: UseCachedDataOptions = {}) {
+  const { autoFetch = true, refreshOnMount = false } = options;
+
+  const [data, setData] = useState<DashboardStats>({
+    totalProperties: 0,
+    totalEmailsSent: 0,
+    totalReplies: 0,
+    replyRate: 0,
+    currentWeek: 1,
+    activeTemplates: 0,
+    weeklyStats: [],
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [initialLoad, setInitialLoad] = useState(true);
+  const fetchingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  const fetchData = useCallback(
+    async (forceRefresh = false) => {
+      if (fetchingRef.current) return;
+
+      try {
+        fetchingRef.current = true;
+        setError(null);
+
+        const hasValidCache = dataCache.hasValidDashboardStatsCache();
+
+        if (
+          initialLoad ||
+          forceRefresh ||
+          (!hasValidCache && data.totalProperties === 0)
+        ) {
+          setLoading(true);
+        }
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Request timeout")), 15000)
+        );
+
+        const dataPromise = forceRefresh
+          ? dataCache.refreshDashboardStats()
+          : dataCache.getDashboardStats();
+
+        const dashboardStats = await Promise.race([
+          dataPromise,
+          timeoutPromise,
+        ]);
+
+        if (mountedRef.current) {
+          setData(dashboardStats as DashboardStats);
+          setInitialLoad(false);
+        }
+      } catch (err) {
+        if (!mountedRef.current) return;
+
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load dashboard stats";
+
+        if (
+          errorMessage.includes("Auth session missing") ||
+          errorMessage.includes("session not found") ||
+          errorMessage.includes("No session")
+        ) {
+          setData({
+            totalProperties: 0,
+            totalEmailsSent: 0,
+            totalReplies: 0,
+            replyRate: 0,
+            currentWeek: 1,
+            activeTemplates: 0,
+            weeklyStats: [],
+          });
+          setError(null);
+        } else {
+          setError(errorMessage);
+        }
+        setInitialLoad(false);
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        fetchingRef.current = false;
+      }
+    },
+    [data.totalProperties, initialLoad]
+  );
+
+  const refresh = useCallback(async () => {
+    return fetchData(true);
+  }, [fetchData]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+
+    if (autoFetch) {
+      fetchData(refreshOnMount);
+    }
+
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [autoFetch, refreshOnMount, fetchData]);
+
+  return {
+    data,
+    loading,
+    error,
+    initialLoad,
+    refetch: fetchData,
+    refresh,
+    hasData: data.totalProperties > 0 || data.totalEmailsSent > 0,
   };
 }

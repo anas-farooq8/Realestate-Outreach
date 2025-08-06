@@ -33,3 +33,41 @@ export interface EmailTemplate {
   created_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
   updated_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
 }
+
+export interface EmailLog {
+  id: string; // UUID - NOT NULL DEFAULT gen_random_uuid()
+  property_id: string; // UUID - NOT NULL
+  template_id: number; // integer - NOT NULL
+  campaign_week: number; // integer - NOT NULL DEFAULT 1
+  replied: boolean; // boolean - NOT NULL DEFAULT false
+  email_id: string; // text - NOT NULL
+  thread_id: string; // text - NOT NULL UNIQUE
+  sent_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  // Joined data from relations (using Supabase naming)
+  properties?: Property;
+  email_templates?: EmailTemplate;
+}
+
+export interface CampaignProgress {
+  id: number; // integer - NOT NULL DEFAULT nextval('campaign_progress_id_seq'::regclass)
+  current_week: number; // integer - NOT NULL DEFAULT 1
+  last_sent_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+}
+
+export interface DashboardStats {
+  totalProperties: number;
+  totalEmailsSent: number;
+  totalReplies: number;
+  replyRate: number;
+  currentWeek: number;
+  activeTemplates: number;
+  weeklyStats: WeeklyStats[];
+}
+
+export interface WeeklyStats {
+  week: number;
+  emailsSent: number;
+  replies: number;
+  replyRate: number;
+  date: string;
+}

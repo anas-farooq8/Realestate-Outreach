@@ -35,10 +35,24 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  BarChart3,
+  Mail,
+  Users,
+  TrendingUp,
+  Calendar,
+  MessageSquare,
+  Target,
+  Clock,
 } from "lucide-react";
 import { exportToExcel } from "@/lib/excel-export";
-import { useCachedProperties } from "@/hooks/use-cached-data";
-import type { Property } from "@/lib/types";
+import {
+  useCachedProperties,
+  useCachedEmailLogs,
+  useCachedCampaignProgress,
+  useCachedDashboardStats,
+  useCachedEmailTemplates,
+} from "@/hooks/use-cached-data";
+import type { Property, EmailLog } from "@/lib/types";
 
 const ITEMS_PER_PAGE = 20;
 
@@ -46,28 +60,53 @@ export default function DashboardPage() {
   // Use cached data with optimized loading behavior
   const {
     data: properties,
-    loading,
-    error,
-    initialLoad,
+    loading: propertiesLoading,
+    error: propertiesError,
     refresh: refreshProperties,
-  } = useCachedProperties({
-    autoFetch: true,
-    refreshOnMount: false, // Don't force refresh on mount
-  });
+  } = useCachedProperties({ autoFetch: true, refreshOnMount: false });
 
+  const {
+    data: emailLogs,
+    loading: emailLogsLoading,
+    refresh: refreshEmailLogs,
+  } = useCachedEmailLogs({ autoFetch: true, refreshOnMount: false });
+
+  const {
+    data: campaignProgress,
+    loading: campaignLoading,
+    refresh: refreshCampaignProgress,
+  } = useCachedCampaignProgress({ autoFetch: true, refreshOnMount: false });
+
+  const {
+    data: dashboardStats,
+    loading: statsLoading,
+    refresh: refreshStats,
+  } = useCachedDashboardStats({ autoFetch: true, refreshOnMount: false });
+
+  const { data: emailTemplates, refresh: refreshTemplates } =
+    useCachedEmailTemplates({ autoFetch: true, refreshOnMount: false });
+
+  const [currentView, setCurrentView] = useState<"properties" | "logs">(
+    "properties"
+  );
   const [filteredProperties, setFilteredProperties] = useState<Property[]>([]);
-  const [paginatedProperties, setPaginatedProperties] = useState<Property[]>(
+  const [filteredEmailLogs, setFilteredEmailLogs] = useState<EmailLog[]>([]);
+  const [paginatedItems, setPaginatedItems] = useState<(Property | EmailLog)[]>(
     []
   );
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
   const [filters, setFilters] = useState({
     state: "all",
     county: "all",
     city: "all",
     zipCode: "all",
     subscriptionStatus: "all",
+    campaignWeek: "all",
+    replyStatus: "all",
+    template: "all",
   });
 
   const { toast } = useToast();
@@ -79,11 +118,12 @@ export default function DashboardPage() {
   };
 
   const applyFilters = () => {
-    let filtered = [...properties];
+    let filteredProps = [...properties];
+    let filteredLogs = [...emailLogs];
 
-    // Search filter
+    // Apply search filter to both properties and logs
     if (searchTerm) {
-      filtered = filtered.filter(
+      filteredProps = filteredProps.filter(
         (property) =>
           property.property_address
             ?.toLowerCase()
@@ -98,42 +138,70 @@ export default function DashboardPage() {
             ?.toLowerCase()
             .includes(searchTerm.toLowerCase())
       );
+
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          log.properties?.property_address
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          log.properties?.decision_maker_name
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          log.properties?.decision_maker_email
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase()) ||
+          log.email_templates?.template_name
+            ?.toLowerCase()
+            .includes(searchTerm.toLowerCase())
+      );
     }
 
-    // State filter
+    // Apply location filters
     if (filters.state !== "all") {
-      filtered = filtered.filter(
+      filteredProps = filteredProps.filter(
         (property) =>
           property.state?.toLowerCase() === filters.state.toLowerCase()
       );
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          log.properties?.state?.toLowerCase() === filters.state.toLowerCase()
+      );
     }
 
-    // County filter
     if (filters.county !== "all") {
-      filtered = filtered.filter(
+      filteredProps = filteredProps.filter(
         (property) =>
           property.county?.toLowerCase() === filters.county.toLowerCase()
       );
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          log.properties?.county?.toLowerCase() === filters.county.toLowerCase()
+      );
     }
 
-    // City filter
     if (filters.city !== "all") {
-      filtered = filtered.filter(
+      filteredProps = filteredProps.filter(
         (property) =>
           property.city?.toLowerCase() === filters.city.toLowerCase()
       );
-    }
-
-    // Zip code filter
-    if (filters.zipCode !== "all") {
-      filtered = filtered.filter(
-        (property) => property.zip_code === filters.zipCode
+      filteredLogs = filteredLogs.filter(
+        (log) =>
+          log.properties?.city?.toLowerCase() === filters.city.toLowerCase()
       );
     }
 
-    // Subscription status filter
+    if (filters.zipCode !== "all") {
+      filteredProps = filteredProps.filter(
+        (property) => property.zip_code === filters.zipCode
+      );
+      filteredLogs = filteredLogs.filter(
+        (log) => log.properties?.zip_code === filters.zipCode
+      );
+    }
+
+    // Apply subscription status filter
     if (filters.subscriptionStatus !== "all") {
-      filtered = filtered.filter((property) => {
+      filteredProps = filteredProps.filter((property) => {
         if (!property.suspend_until) return false;
         const subscribed = isSubscribed(property.suspend_until);
         return filters.subscriptionStatus === "subscribed"
@@ -142,17 +210,44 @@ export default function DashboardPage() {
       });
     }
 
-    setFilteredProperties(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    // Apply email-specific filters
+    if (filters.campaignWeek !== "all") {
+      filteredLogs = filteredLogs.filter(
+        (log) => log.campaign_week === parseInt(filters.campaignWeek)
+      );
+    }
+
+    if (filters.replyStatus !== "all") {
+      filteredLogs = filteredLogs.filter((log) =>
+        filters.replyStatus === "replied" ? log.replied : !log.replied
+      );
+    }
+
+    if (filters.template !== "all") {
+      filteredLogs = filteredLogs.filter(
+        (log) => log.template_id === parseInt(filters.template)
+      );
+    }
+
+    setFilteredProperties(filteredProps);
+    setFilteredEmailLogs(filteredLogs);
+    setCurrentPage(1);
   };
 
   const applyPagination = () => {
+    const currentData =
+      currentView === "properties"
+        ? filteredProperties
+        : currentView === "logs"
+        ? filteredEmailLogs
+        : [];
+
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     const endIndex = startIndex + ITEMS_PER_PAGE;
-    const paginated = filteredProperties.slice(startIndex, endIndex);
+    const paginated = currentData.slice(startIndex, endIndex);
 
-    setPaginatedProperties(paginated);
-    setTotalPages(Math.ceil(filteredProperties.length / ITEMS_PER_PAGE));
+    setPaginatedItems(paginated);
+    setTotalPages(Math.ceil(currentData.length / ITEMS_PER_PAGE));
   };
 
   const clearFilters = () => {
@@ -163,50 +258,59 @@ export default function DashboardPage() {
       city: "all",
       zipCode: "all",
       subscriptionStatus: "all",
+      campaignWeek: "all",
+      replyStatus: "all",
+      template: "all",
     });
     setCurrentPage(1);
   };
 
   const handleExport = async () => {
-    if (filteredProperties.length === 0) {
+    const dataToExport: Property[] | EmailLog[] =
+      currentView === "properties" ? filteredProperties : filteredEmailLogs;
+
+    if (dataToExport.length === 0) {
       toast({
         title: "No Data",
-        description: "No properties to export",
+        description: `No ${currentView} to export`,
         variant: "destructive",
       });
       return;
     }
 
     try {
-      const filename = `properties_${
+      const filename = `${currentView}_${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
-      await exportToExcel(filteredProperties, filename);
+      await exportToExcel(dataToExport, filename);
 
       toast({
         title: "Export Successful",
-        description: `Exported ${filteredProperties.length} properties to ${filename}`,
+        description: `Exported ${dataToExport.length} ${currentView} to ${filename}`,
       });
     } catch (error) {
       console.error("Export failed:", error);
       toast({
         title: "Export Failed",
-        description: "Failed to export properties. Please try again.",
+        description: `Failed to export ${currentView}. Please try again.`,
         variant: "destructive",
       });
     }
   };
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
   const handleRefresh = async () => {
     try {
-      await refreshProperties();
+      await Promise.all([
+        refreshProperties(),
+        refreshEmailLogs(),
+        refreshCampaignProgress(),
+        refreshStats(),
+        refreshTemplates(),
+      ]);
+
       toast({
         title: "Data Refreshed",
-        description: "Properties data has been updated",
+        description: "All dashboard data has been updated",
       });
     } catch (error) {
       toast({
@@ -218,7 +322,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Get unique values for filter dropdowns (optimized)
+  // Get unique values for filter dropdowns (ensure no nulls)
   const uniqueStates = [
     ...new Set(
       properties
@@ -247,28 +351,53 @@ export default function DashboardPage() {
         .filter((zip): zip is string => Boolean(zip))
     ),
   ].sort();
+  const uniqueWeeks = [
+    ...new Set(emailLogs.map((log) => log.campaign_week)),
+  ].sort((a, b) => a - b);
+
+  // Get current template for current week using the rotation formula
+  const getCurrentWeekTemplate = () => {
+    if (!campaignProgress || !emailTemplates.length) return null;
+
+    const activeTemplates = emailTemplates.filter((t) => t.is_active);
+    if (activeTemplates.length === 0) return null;
+
+    // Calculate which template to use based on current week
+    // Formula: ((current_week - 1) % total_templates + 1)
+    const currentWeek = campaignProgress.current_week;
+    const totalTemplates = activeTemplates.length;
+    const templateIndex = (currentWeek - 1) % totalTemplates;
+
+    // Sort templates by ID to ensure consistent ordering
+    const sortedTemplates = activeTemplates.sort((a, b) => a.id - b.id);
+
+    return sortedTemplates[templateIndex] || null;
+  };
+
+  const currentTemplate = getCurrentWeekTemplate();
 
   useEffect(() => {
     applyFilters();
-  }, [searchTerm, filters, properties]);
+  }, [searchTerm, filters, properties, emailLogs]);
 
   useEffect(() => {
     applyPagination();
-  }, [filteredProperties, currentPage]);
+  }, [filteredProperties, filteredEmailLogs, currentPage, currentView]);
 
-  // Show loading when: 1) Initial load with no data, 2) Refreshing data, or 3) Error state with no data
-  const showLoading = loading && (properties.length === 0 || error);
+  const loading =
+    propertiesLoading || emailLogsLoading || campaignLoading || statsLoading;
 
   return (
     <div className="p-6">
       <div className="space-y-8">
+        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              Properties Dashboard
+              Analytics Dashboard
             </h1>
             <p className="mt-2 text-gray-600">
-              Manage and export your enriched property contact data
+              Comprehensive real estate email campaign analytics and management
             </p>
           </div>
           <div className="flex space-x-4">
@@ -280,27 +409,225 @@ export default function DashboardPage() {
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
               />
-              Refresh
+              Refresh All
             </Button>
             <Button
               onClick={handleExport}
-              disabled={filteredProperties.length === 0}
+              disabled={paginatedItems.length === 0}
             >
               <Download className="mr-2 h-4 w-4" />
-              Export Excel
+              Export {currentView}
             </Button>
           </div>
         </div>
 
-        {/* Search and Filters */}
+        {/* Campaign Status */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Filter className="mr-2 h-5 w-5" />
-              Search & Filters
+              <Target className="mr-2 h-5 w-5" />
+              Campaign Status
             </CardTitle>
             <CardDescription>
-              Search and filter properties by various criteria
+              Current campaign progress and active template
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="flex items-center space-x-4">
+                <div className="p-3 rounded-full bg-blue-100">
+                  <Calendar className="h-6 w-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Current Week
+                  </p>
+                  <p className="text-2xl font-bold">
+                    Week {campaignProgress?.current_week || 1}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="p-3 rounded-full bg-green-100">
+                  <MessageSquare className="h-6 w-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Active Template
+                  </p>
+                  <p className="text-lg font-semibold">
+                    {currentTemplate?.template_name || "No active template"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="p-3 rounded-full bg-purple-100">
+                  <Clock className="h-6 w-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Last Sent</p>
+                  <p className="text-lg font-semibold">
+                    {campaignProgress?.last_sent_at
+                      ? new Date(
+                          campaignProgress.last_sent_at
+                        ).toLocaleDateString()
+                      : "Never"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Statistics Overview */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Users className="h-8 w-8 text-blue-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">
+                    Total Properties
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {dashboardStats.totalProperties.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <Mail className="h-8 w-8 text-green-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">
+                    Emails Sent
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {dashboardStats.totalEmailsSent.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <MessageSquare className="h-8 w-8 text-purple-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">
+                    Total Replies
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {dashboardStats.totalReplies.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <TrendingUp className="h-8 w-8 text-orange-500" />
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-500">
+                    Reply Rate
+                  </p>
+                  <p className="text-2xl font-bold">
+                    {dashboardStats.replyRate.toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Weekly Stats */}
+        {dashboardStats.weeklyStats.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BarChart3 className="mr-2 h-5 w-5" />
+                Weekly Performance
+              </CardTitle>
+              <CardDescription>
+                Email campaign performance by week
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {dashboardStats.weeklyStats.map((week) => (
+                  <div key={week.week} className="p-4 border rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <h4 className="font-semibold">Week {week.week}</h4>
+                      <Badge
+                        variant={
+                          week.week === campaignProgress?.current_week
+                            ? "default"
+                            : "secondary"
+                        }
+                      >
+                        {week.week === campaignProgress?.current_week
+                          ? "Current"
+                          : "Completed"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Emails Sent:</span>
+                        <span className="font-medium">{week.emailsSent}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Replies:</span>
+                        <span className="font-medium">{week.replies}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Reply Rate:</span>
+                        <span className="font-medium">
+                          {week.replyRate.toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* View Toggle */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Filter className="mr-2 h-5 w-5" />
+                Data Management
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant={currentView === "properties" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentView("properties")}
+                >
+                  Properties ({filteredProperties.length})
+                </Button>
+                <Button
+                  variant={currentView === "logs" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCurrentView("logs")}
+                >
+                  Email Logs ({filteredEmailLogs.length})
+                </Button>
+              </div>
+            </CardTitle>
+            <CardDescription>
+              Search and filter data across properties and email campaigns
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -309,7 +636,7 @@ export default function DashboardPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                 <Input
-                  placeholder="Search properties, names, companies, or emails..."
+                  placeholder="Search properties, names, companies, emails, or templates..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="pl-10"
@@ -317,7 +644,8 @@ export default function DashboardPage() {
               </div>
 
               {/* Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Location Filters */}
                 <div className="space-y-2">
                   <Label>State</Label>
                   <Select
@@ -405,26 +733,78 @@ export default function DashboardPage() {
                     </SelectContent>
                   </Select>
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Subscription Status</Label>
-                  <Select
-                    value={filters.subscriptionStatus}
-                    onValueChange={(value) =>
-                      setFilters({ ...filters, subscriptionStatus: value })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All statuses" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All statuses</SelectItem>
-                      <SelectItem value="subscribed">Subscribed</SelectItem>
-                      <SelectItem value="unsubscribed">Unsubscribed</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
+
+              {/* Email-specific filters - only show when viewing logs */}
+              {currentView === "logs" && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pt-4 border-t">
+                  <div className="space-y-2">
+                    <Label>Campaign Week</Label>
+                    <Select
+                      value={filters.campaignWeek}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, campaignWeek: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All weeks" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All weeks</SelectItem>
+                        {uniqueWeeks.map((week) => (
+                          <SelectItem key={week} value={week.toString()}>
+                            Week {week}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Reply Status</Label>
+                    <Select
+                      value={filters.replyStatus}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, replyStatus: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All statuses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All statuses</SelectItem>
+                        <SelectItem value="replied">Replied</SelectItem>
+                        <SelectItem value="not-replied">Not Replied</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Template</Label>
+                    <Select
+                      value={filters.template}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, template: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All templates" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All templates</SelectItem>
+                        {emailTemplates.map((template) => (
+                          <SelectItem
+                            key={template.id}
+                            value={template.id.toString()}
+                          >
+                            {template.template_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
 
               <div className="flex space-x-2">
                 <Button onClick={clearFilters} variant="outline" size="sm">
@@ -435,122 +815,185 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Properties Table */}
+        {/* Data Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Properties ({filteredProperties.length})</CardTitle>
+            <CardTitle>
+              {currentView === "properties" ? "Properties" : "Email Logs"}(
+              {currentView === "properties"
+                ? filteredProperties.length
+                : filteredEmailLogs.length}
+              )
+            </CardTitle>
             <CardDescription>
-              {filteredProperties.length !== properties.length &&
-                `Showing ${filteredProperties.length} of ${properties.length} properties`}
-              {filteredProperties.length > ITEMS_PER_PAGE &&
+              {(currentView === "properties"
+                ? filteredProperties.length
+                : filteredEmailLogs.length) !==
+                (currentView === "properties"
+                  ? properties.length
+                  : emailLogs.length) &&
+                `Showing ${
+                  currentView === "properties"
+                    ? filteredProperties.length
+                    : filteredEmailLogs.length
+                } of ${
+                  currentView === "properties"
+                    ? properties.length
+                    : emailLogs.length
+                } ${currentView}`}
+              {paginatedItems.length > 0 &&
+                totalPages > 1 &&
                 ` • Page ${currentPage} of ${totalPages}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {loading || initialLoad ? (
+            {loading ? (
               <div className="flex flex-col items-center justify-center py-8 space-y-4">
                 <RefreshCw className="h-8 w-8 animate-spin" />
-                <p className="text-gray-500">
-                  {properties.length > 0
-                    ? "Refreshing properties..."
-                    : "Loading properties..."}
-                </p>
+                <p className="text-gray-500">Loading {currentView}...</p>
               </div>
-            ) : error ? (
-              <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                <div className="text-center">
-                  <p className="text-red-600 mb-2">⚠️ {error}</p>
-                  <Button onClick={handleRefresh} variant="outline">
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Try Again
-                  </Button>
-                </div>
-              </div>
-            ) : paginatedProperties.length === 0 && properties.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No properties found</p>
-              </div>
-            ) : paginatedProperties.length === 0 ? (
+            ) : paginatedItems.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">
-                  No properties match your filters
+                  No {currentView}{" "}
+                  {searchTerm || Object.values(filters).some((f) => f !== "all")
+                    ? "match your filters"
+                    : "found"}
                 </p>
               </div>
             ) : (
               <>
                 <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Property Name</TableHead>
-                        <TableHead>HOA/Management</TableHead>
-                        <TableHead>Decision Maker</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Phone</TableHead>
-                        <TableHead>City</TableHead>
-                        <TableHead>County</TableHead>
-                        <TableHead>State</TableHead>
-                        <TableHead>Zip</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedProperties.map((property) => (
-                        <TableRow key={property.id}>
-                          <TableCell className="font-medium max-w-xs truncate">
-                            {property.property_address || "—"}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {property.hoa_or_management_company || "—"}
-                          </TableCell>
-                          <TableCell>
-                            {property.decision_maker_name || "—"}
-                          </TableCell>
-                          <TableCell>
-                            {property.decision_maker_email &&
-                            !property.decision_maker_email.includes(
-                              "noemail"
-                            ) ? (
-                              <a
-                                href={`mailto:${property.decision_maker_email}`}
-                                className="text-blue-600 hover:underline truncate block max-w-xs"
-                              >
-                                {property.decision_maker_email}
-                              </a>
-                            ) : (
-                              "—"
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            {property.decision_maker_phone || "—"}
-                          </TableCell>
-                          <TableCell>{property.city || "—"}</TableCell>
-                          <TableCell>{property.county || "—"}</TableCell>
-                          <TableCell>{property.state || "—"}</TableCell>
-                          <TableCell>{property.zip_code || "—"}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                property.suspend_until &&
-                                isSubscribed(property.suspend_until)
-                                  ? "default"
-                                  : "secondary"
-                              }
-                            >
-                              {property.suspend_until &&
-                              isSubscribed(property.suspend_until)
-                                ? "Subscribed"
-                                : "Unsubscribed"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(property.created_at).toLocaleDateString()}
-                          </TableCell>
+                  {currentView === "properties" ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Property Address</TableHead>
+                          <TableHead>HOA/Management</TableHead>
+                          <TableHead>Decision Maker</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Phone</TableHead>
+                          <TableHead>City</TableHead>
+                          <TableHead>State</TableHead>
+                          <TableHead>Zip</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {(paginatedItems as Property[]).map((property) => (
+                          <TableRow key={property.id}>
+                            <TableCell className="font-medium max-w-xs truncate">
+                              {property.property_address || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {property.hoa_or_management_company || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {property.decision_maker_name || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {property.decision_maker_email &&
+                              !property.decision_maker_email.includes(
+                                "noemail"
+                              ) ? (
+                                <a
+                                  href={`mailto:${property.decision_maker_email}`}
+                                  className="text-blue-600 hover:underline truncate block max-w-xs"
+                                >
+                                  {property.decision_maker_email}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {property.decision_maker_phone || "—"}
+                            </TableCell>
+                            <TableCell>{property.city || "—"}</TableCell>
+                            <TableCell>{property.state || "—"}</TableCell>
+                            <TableCell>{property.zip_code || "—"}</TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={
+                                  property.suspend_until &&
+                                  isSubscribed(property.suspend_until)
+                                    ? "default"
+                                    : "secondary"
+                                }
+                              >
+                                {property.suspend_until &&
+                                isSubscribed(property.suspend_until)
+                                  ? "Subscribed"
+                                  : "Unsubscribed"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(
+                                property.created_at
+                              ).toLocaleDateString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Property Address</TableHead>
+                          <TableHead>Decision Maker</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Template Name</TableHead>
+                          <TableHead>Campaign Week</TableHead>
+                          <TableHead>Sent At</TableHead>
+                          <TableHead>Reply Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(paginatedItems as EmailLog[]).map((log) => (
+                          <TableRow key={log.id}>
+                            <TableCell className="font-medium max-w-xs truncate">
+                              {log.properties?.property_address || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {log.properties?.decision_maker_name || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {log.properties?.decision_maker_email ? (
+                                <a
+                                  href={`mailto:${log.properties.decision_maker_email}`}
+                                  className="text-blue-600 hover:underline truncate block max-w-xs"
+                                >
+                                  {log.properties.decision_maker_email}
+                                </a>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {log.email_templates?.template_name || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                Week {log.campaign_week}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(log.sent_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <Badge
+                                variant={log.replied ? "default" : "secondary"}
+                              >
+                                {log.replied ? "Replied" : "No Reply"}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
                 </div>
 
                 {/* Pagination */}
@@ -560,15 +1003,21 @@ export default function DashboardPage() {
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
                       {Math.min(
                         currentPage * ITEMS_PER_PAGE,
-                        filteredProperties.length
+                        currentView === "properties"
+                          ? filteredProperties.length
+                          : filteredEmailLogs.length
                       )}{" "}
-                      of {filteredProperties.length} results
+                      of{" "}
+                      {currentView === "properties"
+                        ? filteredProperties.length
+                        : filteredEmailLogs.length}{" "}
+                      results
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handlePageChange(currentPage - 1)}
+                        onClick={() => setCurrentPage(currentPage - 1)}
                         disabled={currentPage === 1}
                       >
                         <ChevronLeft className="h-4 w-4" />
@@ -599,7 +1048,7 @@ export default function DashboardPage() {
                                     : "outline"
                                 }
                                 size="sm"
-                                onClick={() => handlePageChange(pageNum)}
+                                onClick={() => setCurrentPage(pageNum)}
                                 className="w-8 h-8 p-0"
                               >
                                 {pageNum}
@@ -612,7 +1061,7 @@ export default function DashboardPage() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handlePageChange(currentPage + 1)}
+                        onClick={() => setCurrentPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
                       >
                         Next
