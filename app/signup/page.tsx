@@ -1,11 +1,6 @@
 "use client";
 
 import type React from "react";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,126 +11,185 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import { useSignupController } from "@/hooks/use-signup-controller";
 
 export default function SignupPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-  const { toast } = useToast();
-  const supabase = createClient();
+  const {
+    formData,
+    showPassword,
+    showConfirmPassword,
+    isLoading,
+    pageContent,
+    updateFormField,
+    togglePasswordVisibility,
+    toggleConfirmPasswordVisibility,
+    handleSignup,
+  } = useSignupController();
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (password !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (password.length < 6) {
-      toast({
-        title: "Error",
-        description: "Password must be at least 6 characters long",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Success",
-        description: "Account created successfully! You can now sign in.",
-      });
-      router.push("/login");
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create account",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Show full-page loading during signup process
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center z-50">
+        <div className="flex flex-col items-center space-y-6">
+          <div className="relative">
+            <div className="animate-spin rounded-full h-12 w-12 border-2 border-blue-200"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-600 absolute top-0"></div>
+          </div>
+          <p className="text-sm text-gray-600 font-medium">
+            Creating account...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] py-12 px-4 sm:px-6 lg:px-8">
-      <Card className="w-full max-w-md">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">
-            Sign Up
-          </CardTitle>
-          <CardDescription className="text-center">
-            Create an account to get started with property outreach
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignup} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Sign Up"}
-            </Button>
-          </form>
-          <div className="mt-4 text-center text-sm">
-            Already have an account?{" "}
-            <Link href="/login" className="text-blue-600 hover:underline">
-              Sign in
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-4">
+        {/* Header Section */}
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">
+            {pageContent.title}
+          </h2>
+          <p className="text-gray-600">
+            {pageContent.subtitle}{" "}
+            <Link
+              href={pageContent.loginLink.href}
+              className="font-semibold text-blue-600 hover:text-blue-500 transition-colors duration-200"
+            >
+              {pageContent.loginLink.text}
             </Link>
-          </div>
-        </CardContent>
-      </Card>
+          </p>
+        </div>
+
+        {/* Signup Card */}
+        <Card className="backdrop-blur-sm bg-white/80 shadow-xl border-0 ring-1 ring-gray-200/50">
+          <CardHeader className="text-center pb-6">
+            <CardTitle className="text-xl font-semibold text-gray-900">
+              {pageContent.card.title}
+            </CardTitle>
+            <CardDescription className="text-gray-600">
+              {pageContent.card.description}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSignup} className="space-y-6">
+              <div className="space-y-2">
+                <Label
+                  htmlFor="email"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  {pageContent.form.emailLabel}
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={formData.email}
+                  onChange={(e) => updateFormField("email", e.target.value)}
+                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                  disabled={isLoading}
+                  placeholder="Enter your email address"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="password"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  {pageContent.form.passwordLabel}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    required
+                    value={formData.password}
+                    onChange={(e) =>
+                      updateFormField("password", e.target.value)
+                    }
+                    className="h-11 pr-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                    disabled={isLoading}
+                    minLength={6}
+                    placeholder="Enter your password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-11 w-11 hover:bg-gray-100 transition-colors duration-200"
+                    onClick={togglePasswordVisibility}
+                    disabled={isLoading}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label
+                  htmlFor="confirmPassword"
+                  className="text-sm font-medium text-gray-700"
+                >
+                  {pageContent.form.confirmPasswordLabel}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    required
+                    value={formData.confirmPassword}
+                    onChange={(e) =>
+                      updateFormField("confirmPassword", e.target.value)
+                    }
+                    className="h-11 pr-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500 transition-colors duration-200"
+                    disabled={isLoading}
+                    minLength={6}
+                    placeholder="Confirm your password"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-11 w-11 hover:bg-gray-100 transition-colors duration-200"
+                    onClick={toggleConfirmPasswordVisibility}
+                    disabled={isLoading}
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="h-4 w-4 text-gray-500" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-gray-500" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full h-11"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? pageContent.form.submitButton.loading
+                  : pageContent.form.submitButton.idle}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
