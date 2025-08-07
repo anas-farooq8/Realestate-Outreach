@@ -231,8 +231,19 @@ export default function UploadPage() {
           "Your properties are being processed. You'll receive an email when complete.",
       });
 
-      // Use window.location for more reliable navigation
-      window.location.href = "/dashboard";
+      // Clear the page instead of redirecting
+      setSelectedFile(null);
+      setImagePreview(null);
+      setExtractedProperties([]);
+      setParentAddress("");
+
+      // Reset the file input
+      const fileInput = document.getElementById(
+        "image-upload"
+      ) as HTMLInputElement;
+      if (fileInput) {
+        fileInput.value = "";
+      }
     } catch (error) {
       console.error("Error processing properties:", error);
       toast({
@@ -286,7 +297,7 @@ export default function UploadPage() {
                     type="file"
                     accept="image/*"
                     onChange={handleFileSelect}
-                    className="w-full cursor-pointer"
+                    className="w-full cursor-pointer h-13 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     PNG, JPG up to 10MB

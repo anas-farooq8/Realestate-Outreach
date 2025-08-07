@@ -221,7 +221,7 @@ export function Navbar({ children }: NavbarProps) {
                     <Home className="h-6 w-6 text-white" />
                   </div>
                   <span className="text-lg font-bold text-white">
-                    RealEstate Pro
+                    RealEstate OutReach
                   </span>
                 </div>
               )}
@@ -261,6 +261,38 @@ export function Navbar({ children }: NavbarProps) {
                 );
               })}
             </nav>
+
+            {/* Company Information */}
+            {!sidebarCollapsed && (
+              <div className="px-4 pb-6">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                  <div className="text-center space-y-2">
+                    <h4 className="text-sm font-semibold text-gray-800">
+                      Total Body Mobile Massage
+                    </h4>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Outreach Team
+                    </p>
+                    <div className="space-y-1">
+                      <a
+                        href="mailto:tbmmoutreach@gmail.com"
+                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                      >
+                        tbmmoutreach@gmail.com
+                      </a>
+                      <a
+                        href="https://www.totalbodymobilemassage.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                      >
+                        www.totalbodymobilemassage.com
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -274,7 +306,7 @@ export function Navbar({ children }: NavbarProps) {
                     <Home className="h-6 w-6 text-white" />
                   </div>
                   <span className="text-lg font-bold text-white">
-                    RealEstate Pro
+                    RealEstate OutReach
                   </span>
                 </div>
               </div>
@@ -299,6 +331,36 @@ export function Navbar({ children }: NavbarProps) {
                   );
                 })}
               </nav>
+
+              {/* Company Information */}
+              <div className="px-4 pb-6">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                  <div className="text-center space-y-2">
+                    <h4 className="text-sm font-semibold text-gray-800">
+                      Total Body Mobile Massage
+                    </h4>
+                    <p className="text-xs text-gray-600 font-medium">
+                      Outreach Team
+                    </p>
+                    <div className="space-y-1">
+                      <a
+                        href="mailto:tbmmoutreach@gmail.com"
+                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                      >
+                        tbmmoutreach@gmail.com
+                      </a>
+                      <a
+                        href="https://www.totalbodymobilemassage.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                      >
+                        www.totalbodymobilemassage.com
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </SheetContent>
         </Sheet>
@@ -396,7 +458,7 @@ export function Navbar({ children }: NavbarProps) {
                     <Home className="h-6 w-6 text-white" />
                   </div>
                   <span className="text-xl font-bold text-gray-900">
-                    RealEstate Outreach
+                    RealEstate OutReach
                   </span>
                 </Link>
               </div>

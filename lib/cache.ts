@@ -536,8 +536,83 @@ class DataCache {
     return proposals;
   }
 
+  // Campaign Progress PDF Selection methods
+  async updateSelectedPdf(pdfUrl: string): Promise<void> {
+    const userId = await this.ensureUserContext();
+    if (!userId) {
+      throw new Error("User not authenticated");
+    }
+
+    // Use default PDF URL from schema if pdfUrl is empty/null
+    const finalPdfUrl = pdfUrl && pdfUrl.trim();
+
+    // First, get or create campaign progress record
+    let campaignProgress = await this.getCampaignProgress();
+
+    if (campaignProgress) {
+      // Update existing record
+      const { error } = await this.supabase
+        .from("campaign_progress")
+        .update({
+          pdf_url: finalPdfUrl,
+        })
+        .eq("id", campaignProgress.id);
+
+      if (error) {
+        throw new Error(`Failed to update selected PDF: ${error.message}`);
+      }
+
+      // Update cache
+      const updatedProgress = {
+        ...campaignProgress,
+        pdf_url: finalPdfUrl,
+      };
+
+      this.cache.campaignProgress = {
+        data: updatedProgress,
+        timestamp: Date.now(),
+        userId: userId,
+      };
+      // Invalidate dashboard stats to trigger recalculation
+      this.invalidateDashboardStats();
+    }
+  }
+
+  // Get currently selected PDF URL
+  async getSelectedPdfUrl(): Promise<string | null> {
+    const campaignProgress = await this.getCampaignProgress();
+    const pdfUrl = campaignProgress?.pdf_url || null;
+    // Return null for empty string or default URLs
+    return pdfUrl && pdfUrl.trim() ? pdfUrl : null;
+  }
+
+  // Helper function to sanitize filename for Supabase Storage
+  private sanitizeFileName(filename: string): string {
+    // Remove file extension temporarily
+    const lastDotIndex = filename.lastIndexOf(".");
+    const nameWithoutExt =
+      lastDotIndex > 0 ? filename.substring(0, lastDotIndex) : filename;
+    const extension = lastDotIndex > 0 ? filename.substring(lastDotIndex) : "";
+
+    // Remove or replace invalid characters
+    // Supabase Storage allows: letters, numbers, hyphens, underscores, periods, and forward slashes
+    const sanitized = nameWithoutExt
+      .replace(/[^\w\s\-_.]/g, "") // Remove emojis and special characters, keep spaces
+      .replace(/\s+/g, "_") // Replace spaces with underscores
+      .replace(/_{2,}/g, "_") // Replace multiple underscores with single
+      .replace(/^_+|_+$/g, "") // Remove leading/trailing underscores
+      .trim();
+
+    // Ensure we have a valid filename
+    const finalName = sanitized || "untitled";
+
+    return `${finalName}${extension}`;
+  }
+
   // PDF Proposals management methods
-  async uploadPdfProposal(file: File): Promise<string> {
+  async uploadPdfProposal(
+    file: File
+  ): Promise<{ path: string; actualFileName: string }> {
     // Ensure user context is available (this will handle authentication)
     const userId = await this.ensureUserContext();
     if (!userId) {
@@ -551,7 +626,27 @@ class DataCache {
       );
     }
 
-    const fileName = `${file.name}`;
+    // Sanitize the filename to remove emojis and invalid characters
+    const fileName = this.sanitizeFileName(file.name);
+
+    // First check if file already exists
+    const { data: existingFiles, error: listError } =
+      await this.storageClient.storage.from(bucketName).list("", {
+        limit: 1000,
+        offset: 0,
+      });
+
+    if (listError) {
+      throw new Error(`Failed to check existing files: ${listError.message}`);
+    }
+
+    // Check if a file with the same name already exists
+    const fileExists = existingFiles?.some((file) => file.name === fileName);
+    if (fileExists) {
+      throw new Error(
+        `A file named "${fileName}" already exists. Please delete the existing file first or choose a different name.`
+      );
+    }
 
     const { data, error } = await this.storageClient.storage
       .from(bucketName)
@@ -564,11 +659,14 @@ class DataCache {
       throw new Error(`Failed to upload PDF: ${error.message}`);
     }
 
-    // Add to cache instead of invalidating for better performance
-    console.log(`➕ [CACHE ADD] Adding PDF to cache: ${fileName}`);
-    this.addPdfProposalToCache(fileName, file.size);
+    // Get the actual file name from the upload response
+    const actualFileName = data.path;
 
-    return data.path;
+    // Add to cache instead of invalidating for better performance
+    console.log(`➕ [CACHE ADD] Adding PDF to cache: ${actualFileName}`);
+    this.addPdfProposalToCache(actualFileName, file.size);
+
+    return { path: data.path, actualFileName };
   }
 
   async deletePdfProposal(fileName: string): Promise<void> {
@@ -585,17 +683,42 @@ class DataCache {
       );
     }
 
+    // First check if the file exists
+    const { data: fileList, error: listError } =
+      await this.storageClient.storage.from(bucketName).list("", {
+        limit: 1000,
+        offset: 0,
+      });
+
+    if (listError) {
+      throw new Error(`Failed to list files: ${listError.message}`);
+    }
+
+    // Find the exact file name (handles cases where Supabase renamed the file)
+    const actualFile = fileList?.find(
+      (file) =>
+        file.name === fileName ||
+        (file.name.startsWith(fileName.replace(".pdf", "")) &&
+          file.name.endsWith(".pdf"))
+    );
+
+    if (!actualFile) {
+      throw new Error(`File not found: ${fileName}`);
+    }
+
+    const actualFileName = actualFile.name;
+
     const { error } = await this.storageClient.storage
       .from(bucketName)
-      .remove([fileName]);
+      .remove([actualFileName]);
 
     if (error) {
       throw new Error(`Failed to delete PDF: ${error.message}`);
     }
 
     // Remove from cache instead of invalidating for better performance
-    console.log(`�️ [CACHE REMOVE] Removing PDF from cache: ${fileName}`);
-    this.removePdfProposalFromCache(fileName);
+    console.log(`🗑️ [CACHE REMOVE] Removing PDF from cache: ${actualFileName}`);
+    this.removePdfProposalFromCache(actualFileName);
   }
 
   // View PDF method - returns the public URL for viewing
@@ -687,7 +810,7 @@ class DataCache {
     this.cache.campaignProgress = null;
   }
 
-  private invalidateDashboardStats(): void {
+  public invalidateDashboardStats(): void {
     this.cache.dashboardStats = null;
   }
 
@@ -749,17 +872,10 @@ class DataCache {
     this.fetchingPdfProposals = false;
     // Invalidate cache completely
     this.invalidatePdfProposals();
-    // Force fresh fetch from storage
-    const result = await this.fetchPdfProposalsFromStorage();
-    // Update cache with fresh data
-    const userId = await this.ensureUserContext();
-    if (userId) {
-      this.cache.pdfProposals = {
-        data: result,
-        timestamp: Date.now(),
-        userId: userId,
-      };
-    }
+    // Force fresh fetch from storage and update cache
+    const result = await this.getPdfProposals();
+    // Notify React hooks about cache change
+    this.notifyCacheChange();
     return result;
   }
 

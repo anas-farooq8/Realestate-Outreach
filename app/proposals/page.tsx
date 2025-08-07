@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardContent,
@@ -28,6 +29,11 @@ import {
   Upload,
   Trash2,
   Info,
+  CheckCircle,
+  Circle,
+  ArrowUp,
+  ArrowDown,
+  Filter,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -64,6 +70,9 @@ export default function ProposalsPage() {
     refresh: refreshPdfProposals,
   } = useCachedPdfProposals({ autoFetch: true, refreshOnMount: false });
 
+  // Local state management for immediate UI updates
+  const [localPdfProposals, setLocalPdfProposals] = useState<PDFProposal[]>([]);
+  const [isLocalSynced, setIsLocalSynced] = useState(false);
   const [filteredPdfProposals, setFilteredPdfProposals] = useState<
     PDFProposal[]
   >([]);
@@ -75,8 +84,53 @@ export default function ProposalsPage() {
   const [selectedPdfForMetadata, setSelectedPdfForMetadata] =
     useState<PDFProposal | null>(null);
   const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false);
+  const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
+  const [selectingPdf, setSelectingPdf] = useState(false);
+  const [sortBy, setSortBy] = useState<"date" | "size">("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const { toast } = useToast();
+
+  // Sync local PDF proposals with cached data when it changes
+  useEffect(() => {
+    if (pdfProposals.length > 0) {
+      setLocalPdfProposals(pdfProposals);
+      setIsLocalSynced(true);
+    } else if (pdfProposals.length === 0 && !pdfProposalsLoading) {
+      // Empty result from cache (not loading)
+      setLocalPdfProposals([]);
+      setIsLocalSynced(true);
+    }
+  }, [pdfProposals, pdfProposalsLoading]);
+
+  // Load currently selected PDF URL
+  useEffect(() => {
+    const loadSelectedPdf = async () => {
+      try {
+        const { dataCache } = await import("@/lib/cache");
+        const currentPdfUrl = await dataCache.getSelectedPdfUrl();
+        setSelectedPdfUrl(currentPdfUrl);
+      } catch (error) {
+        console.error("Failed to load selected PDF:", error);
+      }
+    };
+
+    loadSelectedPdf();
+  }, []);
+
+  // Use local state for immediate UI updates, fallback to cached data
+  const displayPdfProposals = isLocalSynced ? localPdfProposals : pdfProposals;
+
+  // Local state management helpers
+  const addLocalPdfProposal = (newProposal: PDFProposal) => {
+    setLocalPdfProposals((prev) => [newProposal, ...prev]);
+  };
+
+  const removeLocalPdfProposal = (fileName: string) => {
+    setLocalPdfProposals((prev) =>
+      prev.filter((proposal) => proposal.name !== fileName)
+    );
+  };
 
   const handleFileUpload = async (
     event: React.ChangeEvent<HTMLInputElement>
@@ -96,22 +150,61 @@ export default function ProposalsPage() {
     setUploadingPdf(true);
     try {
       const { dataCache } = await import("@/lib/cache");
-      // This calls uploadPdfProposal which uses addPdfProposalToCache internally
-      // for efficient cache updates without full cache invalidation
-      await dataCache.uploadPdfProposal(file);
+      // Upload PDF and get the actual file name (which might be different if duplicate)
+      const result = await dataCache.uploadPdfProposal(file);
 
-      toast({
-        title: "Upload Successful",
-        description: `${file.name} has been uploaded successfully.`,
-      });
+      // Create new proposal object with actual file name from storage
+      const newProposal: PDFProposal = {
+        name: result.actualFileName,
+        size: file.size,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        last_accessed_at: new Date().toISOString(),
+        publicUrl: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL
+          ? `${
+              process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL
+            }/${encodeURIComponent(result.actualFileName)}`
+          : undefined,
+        metadata: {
+          eTag: "",
+          mimetype: "application/pdf",
+          cacheControl: "3600",
+          lastModified: new Date().toISOString(),
+          contentLength: file.size,
+          httpStatusCode: 200,
+        },
+      };
 
-      // Cache is already updated by addPdfProposalToCache, no refresh needed
+      // Add to local state for immediate UI update
+      addLocalPdfProposal(newProposal);
+
+      // Show appropriate success message
+      const originalName = file.name;
+      const uploadedName = result.actualFileName;
+
+      if (originalName !== uploadedName) {
+        toast({
+          title: "Upload Successful",
+          description: `"${originalName}" has been uploaded as "${uploadedName}" (filename was sanitized for compatibility).`,
+        });
+      } else {
+        toast({
+          title: "Upload Successful",
+          description: `${originalName} has been uploaded successfully.`,
+        });
+      }
     } catch (error) {
-      console.error("Upload failed:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to upload PDF";
+
+      // Don't log duplicate file errors as console errors since they're expected user behavior
+      if (!errorMessage.includes("already exists")) {
+        console.error("Upload failed:", error);
+      }
+
       toast({
         title: "Upload Failed",
-        description:
-          error instanceof Error ? error.message : "Failed to upload PDF",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -124,17 +217,16 @@ export default function ProposalsPage() {
   const handleDeletePdf = async (fileName: string) => {
     try {
       const { dataCache } = await import("@/lib/cache");
-      // This calls deletePdfProposal which uses removePdfProposalFromCache internally
-      // for efficient cache updates without full cache invalidation
+      // Delete from storage first
       await dataCache.deletePdfProposal(fileName);
+
+      // Remove from local state for immediate UI update
+      removeLocalPdfProposal(fileName);
 
       toast({
         title: "Delete Successful",
         description: `${fileName} has been deleted successfully.`,
       });
-
-      // The cache is automatically updated by removePdfProposalFromCache
-      // The UI will update automatically through the hook
     } catch (error) {
       console.error("Delete failed:", error);
       toast({
@@ -163,8 +255,51 @@ export default function ProposalsPage() {
     setIsMetadataDialogOpen(true);
   };
 
+  const handleSelectPdf = async (pdf: PDFProposal) => {
+    if (!pdf.publicUrl) {
+      toast({
+        title: "Selection Failed",
+        description: "PDF URL is not available",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectingPdf(true);
+    try {
+      const { dataCache } = await import("@/lib/cache");
+      await dataCache.updateSelectedPdf(pdf.publicUrl);
+      setSelectedPdfUrl(pdf.publicUrl);
+
+      toast({
+        title: "PDF Selected",
+        description: `${pdf.name} has been selected for campaigns.`,
+      });
+    } catch (error) {
+      console.error("Failed to select PDF:", error);
+      toast({
+        title: "Selection Failed",
+        description:
+          error instanceof Error ? error.message : "Failed to select PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setSelectingPdf(false);
+    }
+  };
+
+  const handleDeselectPdf = async () => {
+    // Show warning toast instead of allowing deselection
+    toast({
+      title: "Cannot Deselect PDF",
+      description:
+        "You cannot deselect the current PDF. Please choose a different PDF instead.",
+      variant: "destructive",
+    });
+  };
+
   const applyFilters = () => {
-    let filteredPdfs = [...pdfProposals];
+    let filteredPdfs = [...displayPdfProposals];
 
     // Apply search filter to PDFs
     if (searchTerm) {
@@ -173,11 +308,24 @@ export default function ProposalsPage() {
       );
     }
 
-    // Sort by upload date (newest first)
+    // Apply sorting
     filteredPdfs.sort((a, b) => {
-      const dateA = new Date(a.created_at).getTime();
-      const dateB = new Date(b.created_at).getTime();
-      return dateB - dateA; // Newest first
+      let comparison = 0;
+
+      switch (sortBy) {
+        case "date":
+          const dateA = new Date(a.created_at).getTime();
+          const dateB = new Date(b.created_at).getTime();
+          comparison = dateA - dateB;
+          break;
+        case "size":
+          comparison = a.size - b.size;
+          break;
+        default:
+          comparison = 0;
+      }
+
+      return sortDirection === "asc" ? comparison : -comparison;
     });
 
     setFilteredPdfProposals(filteredPdfs);
@@ -196,8 +344,11 @@ export default function ProposalsPage() {
   const handleRefresh = async () => {
     try {
       // Force refresh by calling cache refresh directly (bypasses cache)
-      const { dataCache } = await import("@/lib/cache");
-      await dataCache.refreshPdfProposals();
+      await refreshPdfProposals();
+      // Reset local sync to force reload from cache
+      setIsLocalSynced(false);
+
+      // Don't reload selected PDF URL - keep current UI selection state
 
       toast({
         title: "Data Refreshed",
@@ -214,9 +365,18 @@ export default function ProposalsPage() {
     }
   };
 
+  const handleSort = (field: "date" | "size") => {
+    if (sortBy === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortDirection("asc");
+    }
+  };
+
   useEffect(() => {
     applyFilters();
-  }, [searchTerm, pdfProposals]);
+  }, [searchTerm, displayPdfProposals, sortBy, sortDirection]);
 
   useEffect(() => {
     applyPagination();
@@ -259,7 +419,8 @@ export default function ProposalsPage() {
               </div>
             </CardTitle>
             <CardDescription>
-              Upload, view, and manage your PDF proposal documents
+              Upload, view, and manage your PDF proposal documents. Select one
+              PDF to use for email campaigns. No PDF is selected by default.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -295,22 +456,73 @@ export default function ProposalsPage() {
                     ) : (
                       <>
                         <Upload className="mr-2 h-4 w-4" />
-                        Choose PDF
+                        Upload a PDF
                       </>
                     )}
                   </label>
                 </div>
               </div>
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search PDF files..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+              {/* Search and Sort */}
+              <div className="space-y-4">
+                {/* Search Bar */}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                  <Input
+                    placeholder="Search PDF files by Name..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+
+                {/* Sort Controls */}
+                <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+                  <div className="flex flex-wrap gap-4 items-center">
+                    <div className="flex items-center space-x-2">
+                      <Filter className="h-4 w-4 text-gray-500" />
+                      <Label className="text-sm font-medium text-gray-500">
+                        Sort by:
+                      </Label>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant={sortBy === "date" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleSort("date")}
+                          className="flex items-center space-x-1"
+                        >
+                          <span>Date</span>
+                          {sortBy === "date" &&
+                            (sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3" />
+                            ))}
+                        </Button>
+                        <Button
+                          variant={sortBy === "size" ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleSort("size")}
+                          className="flex items-center space-x-1"
+                        >
+                          <span>Size</span>
+                          {sortBy === "size" &&
+                            (sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3" />
+                            ))}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Results count */}
+                  <div className="text-sm text-gray-500">
+                    {filteredPdfProposals.length} PDF
+                    {filteredPdfProposals.length !== 1 ? "s" : ""} found
+                  </div>
+                </div>
               </div>
             </div>
           </CardContent>
@@ -358,6 +570,7 @@ export default function ProposalsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead>Status</TableHead>
                         <TableHead>File Name</TableHead>
                         <TableHead>Size</TableHead>
                         <TableHead>Uploaded</TableHead>
@@ -365,80 +578,143 @@ export default function ProposalsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedItems.map((pdf) => (
-                        <TableRow
-                          key={pdf.name}
-                          className="cursor-pointer hover:bg-gray-50"
-                          onClick={() => handleRowClick(pdf)}
-                        >
-                          <TableCell className="font-medium">
-                            <div className="flex items-center space-x-2">
-                              <FileText className="h-4 w-4 text-red-500" />
-                              <span className="truncate max-w-xs">
-                                {pdf.name}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {(pdf.size / 1024).toFixed(1)} KB
-                          </TableCell>
-                          <TableCell>
-                            {new Date(pdf.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleShowMetadata(pdf);
-                                }}
-                                title="Show Metadata"
-                              >
-                                <Info className="h-4 w-4" />
-                              </Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                    }}
-                                    className="text-red-600 hover:text-red-700"
-                                    title="Delete PDF"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Delete PDF
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete "
-                                      {pdf.name}"? This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleDeletePdf(pdf.name)}
-                                      className="bg-red-600 hover:bg-red-700"
+                      {paginatedItems.map((pdf) => {
+                        const isSelected = selectedPdfUrl === pdf.publicUrl;
+
+                        return (
+                          <TableRow
+                            key={pdf.name}
+                            className={`cursor-pointer hover:bg-gray-50 ${
+                              isSelected
+                                ? "bg-blue-50 border-l-4 border-l-blue-500"
+                                : ""
+                            }`}
+                            onClick={() => handleRowClick(pdf)}
+                          >
+                            <TableCell>
+                              <div className="flex items-center justify-center">
+                                <Button
+                                  variant={isSelected ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isSelected) {
+                                      handleDeselectPdf();
+                                    } else {
+                                      handleSelectPdf(pdf);
+                                    }
+                                  }}
+                                  disabled={selectingPdf}
+                                  className={`${
+                                    isSelected
+                                      ? "bg-green-600 hover:bg-green-700 text-white"
+                                      : "hover:bg-blue-50"
+                                  }`}
+                                  title={
+                                    isSelected
+                                      ? "Cannot deselect - choose a different PDF to switch"
+                                      : "Select this PDF for campaigns"
+                                  }
+                                >
+                                  {selectingPdf ? (
+                                    <RefreshCw className="h-4 w-4 animate-spin" />
+                                  ) : isSelected ? (
+                                    <CheckCircle className="h-4 w-4" />
+                                  ) : (
+                                    <Circle className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              <div className="flex items-center space-x-2">
+                                <FileText className="h-4 w-4 text-red-500" />
+                                <span className="truncate max-w-xs">
+                                  {pdf.name}
+                                </span>
+                                {isSelected && (
+                                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                                    SELECTED
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {(pdf.size / 1024).toFixed(1)} KB
+                            </TableCell>
+                            <TableCell>
+                              {new Date(pdf.created_at).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleShowMetadata(pdf);
+                                  }}
+                                  title="Show Metadata"
+                                >
+                                  <Info className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                      }}
+                                      disabled={isSelected}
+                                      className={`${
+                                        isSelected
+                                          ? "text-gray-400 cursor-not-allowed opacity-50"
+                                          : "text-red-600 hover:text-red-700"
+                                      }`}
+                                      title={
+                                        isSelected
+                                          ? "Cannot delete the selected PDF. Please select a different PDF first."
+                                          : "Delete PDF"
+                                      }
                                     >
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  {!isSelected && (
+                                    <AlertDialogContent>
+                                      <AlertDialogHeader>
+                                        <AlertDialogTitle>
+                                          Delete PDF
+                                        </AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                          Are you sure you want to delete "
+                                          {pdf.name}"? This action cannot be
+                                          undone.
+                                        </AlertDialogDescription>
+                                      </AlertDialogHeader>
+                                      <AlertDialogFooter>
+                                        <AlertDialogCancel>
+                                          Cancel
+                                        </AlertDialogCancel>
+                                        <AlertDialogAction
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeletePdf(pdf.name);
+                                          }}
+                                          className="bg-red-600 hover:bg-red-700"
+                                        >
+                                          Delete
+                                        </AlertDialogAction>
+                                      </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                  )}
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </div>

@@ -42,6 +42,7 @@ import {
   MessageSquare,
   Target,
   Clock,
+  FileText,
 } from "lucide-react";
 import { exportToExcel } from "@/lib/excel-export";
 import {
@@ -90,6 +91,7 @@ export default function DashboardPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedPdfUrl, setSelectedPdfUrl] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
     state: "all",
@@ -469,6 +471,33 @@ export default function DashboardPage() {
     applyPagination();
   }, [filteredProperties, filteredEmailLogs, currentPage, currentView]);
 
+  // Load selected PDF URL
+  useEffect(() => {
+    const loadSelectedPdf = async () => {
+      try {
+        const { dataCache } = await import("@/lib/cache");
+        const currentPdfUrl = await dataCache.getSelectedPdfUrl();
+        setSelectedPdfUrl(currentPdfUrl);
+      } catch (error) {
+        console.error("Failed to load selected PDF:", error);
+      }
+    };
+
+    loadSelectedPdf();
+  }, [campaignProgress]); // Reload when campaign progress changes
+
+  // Helper function to extract clean PDF name from URL
+  const getPdfDisplayName = (url: string): string => {
+    try {
+      const filename = url.split("/").pop() || "";
+      // Decode URL encoding and clean up the filename
+      const cleanName = decodeURIComponent(filename).replace(/^\/+/, "");
+      return cleanName || "Selected PDF";
+    } catch (error) {
+      return "Selected PDF";
+    }
+  };
+
   const loading = propertiesLoading || emailLogsLoading || campaignLoading;
 
   return (
@@ -517,7 +546,7 @@ export default function DashboardPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="flex items-center space-x-4">
                 <div className="p-3 rounded-full bg-blue-100">
                   <Calendar className="h-6 w-6 text-blue-600" />
@@ -559,6 +588,47 @@ export default function DashboardPage() {
                         ).toLocaleDateString()
                       : "Never"}
                   </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <div className="p-3 rounded-full bg-orange-100">
+                  <FileText className="h-6 w-6 text-orange-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">
+                    Selected PDF
+                  </p>
+                  {selectedPdfUrl ? (
+                    <div className="space-y-1">
+                      <p
+                        className="text-sm font-semibold text-green-700 truncate max-w-[200px]"
+                        title={getPdfDisplayName(selectedPdfUrl)}
+                      >
+                        {getPdfDisplayName(selectedPdfUrl)}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => window.open(selectedPdfUrl, "_blank")}
+                        className="text-xs h-6 px-2"
+                      >
+                        View PDF
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-sm text-gray-500">No PDF selected</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => (window.location.href = "/proposals")}
+                        className="text-xs h-6 px-2"
+                      >
+                        Select PDF
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

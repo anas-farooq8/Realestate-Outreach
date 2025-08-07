@@ -12,11 +12,44 @@ async function processPropertiesAsync(
   supabase: any
 ) {
   let processedCount = 0;
+  let skippedCount = 0;
+  const skippedProperties: string[] = [];
   const batchSize = 5; // Process 5 properties at a time
 
-  // Function to process a single property
-  async function processSingleProperty(propertyName: string): Promise<boolean> {
+  // Function to check if property already exists
+  async function propertyExists(propertyName: string): Promise<boolean> {
     try {
+      const { data, error } = await supabase
+        .from("properties")
+        .select("id")
+        .eq("property_address", propertyName)
+        .limit(1);
+
+      if (error) {
+        console.error("Error checking property existence:", error);
+        return false; // If we can't check, proceed with processing
+      }
+
+      return data && data.length > 0;
+    } catch (error) {
+      console.error("Error checking property existence:", error);
+      return false; // If we can't check, proceed with processing
+    }
+  }
+
+  // Function to process a single property
+  async function processSingleProperty(
+    propertyName: string
+  ): Promise<"processed" | "skipped" | "failed"> {
+    try {
+      // Check if property already exists
+      const exists = await propertyExists(propertyName);
+      if (exists) {
+        console.log(`Property already exists, skipping: ${propertyName}`);
+        skippedProperties.push(propertyName);
+        return "skipped";
+      }
+
       const enrichedData = await enrichPropertyData(
         propertyName,
         parentAddress
@@ -38,14 +71,14 @@ async function processPropertiesAsync(
 
       if (insertError) {
         console.error("Error inserting property:", insertError);
-        return false;
+        return "failed";
       } else {
         console.log(`Successfully processed property: ${propertyName}`);
-        return true;
+        return "processed";
       }
     } catch (error) {
       console.error(`Error processing property ${propertyName}:`, error);
-      return false;
+      return "failed";
     }
   }
 
@@ -65,12 +98,21 @@ async function processPropertiesAsync(
       );
       const batchResults = await Promise.all(batchPromises);
 
-      // Count successful processing
-      const successfulInBatch = batchResults.filter((result) => result).length;
+      // Count results
+      const successfulInBatch = batchResults.filter(
+        (result) => result === "processed"
+      ).length;
+      const skippedInBatch = batchResults.filter(
+        (result) => result === "skipped"
+      ).length;
+
       processedCount += successfulInBatch;
+      skippedCount += skippedInBatch;
 
       console.log(
-        `Batch completed: ${successfulInBatch}/${batch.length} properties processed successfully`
+        `Batch completed: ${successfulInBatch} processed, ${skippedInBatch} skipped, ${
+          batch.length - successfulInBatch - skippedInBatch
+        } failed`
       );
 
       // Add delay between batches (10 seconds)
@@ -80,8 +122,14 @@ async function processPropertiesAsync(
       }
     }
 
-    // Send completion email
-    await sendCompletionEmail(userEmail, properties.length, processedCount);
+    // Send completion email with skipped count
+    await sendCompletionEmail(
+      userEmail,
+      properties.length,
+      processedCount,
+      skippedCount,
+      skippedProperties
+    );
   } catch (error) {
     console.error("Error in async processing:", error);
   }

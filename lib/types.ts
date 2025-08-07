@@ -53,6 +53,7 @@ export interface CampaignProgress {
   id: number; // integer - NOT NULL DEFAULT nextval('campaign_progress_id_seq'::regclass)
   current_week: number; // integer - NOT NULL DEFAULT 1
   last_sent_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
+  pdf_url: string; // text - NOT NULL DEFAULT 'https://...'
 }
 
 export interface DashboardStats {
