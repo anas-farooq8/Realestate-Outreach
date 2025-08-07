@@ -174,6 +174,7 @@ export function Navbar({ children }: NavbarProps) {
     return email?.split("@")[0] || "User";
   };
 
+  /* 
   // Show loading spinner during initial load, sign out, or when auth not initialized
   if (isLoading || isSigningOut || !authInitialized) {
     return (
@@ -187,11 +188,15 @@ export function Navbar({ children }: NavbarProps) {
       </div>
     );
   }
+  */
 
   // For protected routes, only show authenticated layout
+
   if (isProtectedRoute) {
     // If user is not authenticated on protected route, show loading
     // (middleware should redirect, but this prevents flashing)
+
+    /*
     if (!user) {
       return (
         <div className="flex h-screen bg-gray-50 items-center justify-center">
@@ -202,6 +207,7 @@ export function Navbar({ children }: NavbarProps) {
         </div>
       );
     }
+    */
 
     // Show authenticated layout for protected routes
     return (
@@ -487,6 +493,7 @@ export function Navbar({ children }: NavbarProps) {
 
   // If user is authenticated but on non-protected route, show loading
   // (middleware should redirect them)
+  /*
   return (
     <div className="flex h-screen bg-gray-50 items-center justify-center">
       <div className="flex flex-col items-center space-y-4">
@@ -495,4 +502,5 @@ export function Navbar({ children }: NavbarProps) {
       </div>
     </div>
   );
+  */
 }
