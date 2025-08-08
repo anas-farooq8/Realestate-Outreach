@@ -570,7 +570,8 @@ export default function ProposalsPage() {
               PDF Proposals
             </h1>
             <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-600">
-              Manage and view your PDF proposals and service documents
+              Upload, view, and manage your PDF proposal documents. Select one
+              PDF to use for email campaigns.
             </p>
           </div>
           <Button
@@ -590,26 +591,23 @@ export default function ProposalsPage() {
 
         {/* Upload and Search Section */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center text-lg md:text-xl">
-              <FileText className="mr-2 h-5 w-5" />
-              Proposal Management
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Upload, view, and manage your PDF proposal documents. Select one
-              PDF to use for email campaigns.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Upload Section */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 border border-dashed border-gray-300 rounded-lg gap-4">
-              <div className="flex items-center space-x-2">
-                <Upload className="h-5 w-5 text-gray-400" />
-                <span className="text-sm text-gray-600">
-                  Upload new PDF proposal
-                </span>
+          <CardContent className="pt-6 space-y-6">
+            {/* Compact Upload Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 border border-dashed border-blue-300 rounded-lg bg-blue-50/30">
+              <div className="flex items-center space-x-3 flex-1">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <Upload className="h-4 w-4 text-blue-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    Upload PDF
+                  </p>
+                  <p className="text-xs text-gray-600 truncate">
+                    Select proposal document
+                  </p>
+                </div>
               </div>
-              <div className="w-full sm:w-auto">
+              <div>
                 <input
                   type="file"
                   accept=".pdf"
@@ -620,27 +618,29 @@ export default function ProposalsPage() {
                 />
                 <label
                   htmlFor="pdf-upload"
-                  className={`cursor-pointer inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                  className={`cursor-pointer inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors min-w-[100px] ${
                     uploadingPdf ? "opacity-50 cursor-not-allowed" : ""
                   }`}
                 >
                   {uploadingPdf ? (
                     <>
-                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
+                      <RefreshCw className="mr-1 h-4 w-4 animate-spin" />
+                      <span className="hidden sm:inline">Uploading...</span>
+                      <span className="sm:hidden">...</span>
                     </>
                   ) : (
                     <>
-                      <Upload className="mr-2 h-4 w-4" />
-                      Upload PDF
+                      <Upload className="mr-1 h-4 w-4" />
+                      <span className="hidden sm:inline">Choose File</span>
+                      <span className="sm:hidden">Upload</span>
                     </>
                   )}
                 </label>
               </div>
             </div>
 
-            {/* Search and Sort */}
-            <div className="space-y-4">
+            {/* Search and Sort Section */}
+            <div className="space-y-4 pt-2 border-t border-gray-200">
               {/* Search Bar */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -710,8 +710,8 @@ export default function ProposalsPage() {
               PDF Files ({filteredPdfProposals.length})
             </CardTitle>
             <CardDescription className="text-sm">
-              {filteredPdfProposals.length !== pdfProposals.length &&
-                `Showing ${filteredPdfProposals.length} of ${pdfProposals.length} files`}
+              {filteredPdfProposals.length !== displayPdfProposals.length &&
+                `Showing ${filteredPdfProposals.length} of ${displayPdfProposals.length} files`}
               {paginatedItems.length > 0 &&
                 totalPages > 1 &&
                 ` • Page ${currentPage} of ${totalPages}`}
@@ -998,7 +998,7 @@ export default function ProposalsPage() {
         open={isMetadataDialogOpen}
         onOpenChange={setIsMetadataDialogOpen}
       >
-        <DialogContent className="mx-4 sm:mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6">
+        <DialogContent className="max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6">
           <DialogHeader>
             <DialogTitle>PDF Metadata</DialogTitle>
             <DialogDescription>
