@@ -49,15 +49,7 @@ export default function LoginPage() {
           <h2 className="text-3xl font-bold text-gray-900 mb-2">
             {pageContent.title}
           </h2>
-          <p className="text-gray-600">
-            {pageContent.subtitle}{" "}
-            <Link
-              href={pageContent.signupLink.href}
-              className="font-semibold text-blue-600 hover:text-blue-500 transition-colors duration-200"
-            >
-              {pageContent.signupLink.text}
-            </Link>
-          </p>
+          <p className="text-gray-600">{pageContent.subtitle} </p>
         </div>
 
         {/* Login Card */}

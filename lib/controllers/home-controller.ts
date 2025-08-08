@@ -61,10 +61,10 @@ export class HomeController {
     return {
       title: "Ready to Start?",
       description:
-        "Automated email sending powered by n8n workflows. Join now and streamline your outreach process.",
+        "Automated email sending powered by n8n workflows. Contact your administrator for access to the platform.",
       cta: {
-        text: "Get Started Now",
-        href: "/signup",
+        text: "Login to Your Account",
+        href: "/login",
       },
     };
   }

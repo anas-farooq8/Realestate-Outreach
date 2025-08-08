@@ -15,6 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { dataCache } from "@/lib/cache";
+import { useAuth } from "@/contexts/auth-context";
 import {
   Home,
   Upload,
@@ -25,6 +26,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  UserPlus,
 } from "lucide-react";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
 
@@ -33,12 +35,10 @@ interface NavbarProps {
 }
 
 export function Navbar({ children }: NavbarProps) {
-  const [user, setUser] = useState<any>(null);
+  const { user, isRootUser, isLoading, isAuthInitialized } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
   const [isSigningOut, setIsSigningOut] = useState(false);
-  const [authInitialized, setAuthInitialized] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -51,78 +51,31 @@ export function Navbar({ children }: NavbarProps) {
     "/upload",
     "/email-templates",
     "/proposals",
+    "/invite",
   ];
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   );
 
-  // Initialize app
+  // Initialize sidebar state only
   useEffect(() => {
-    const initializeApp = async () => {
-      try {
-        // Get saved sidebar state
-        const saved = localStorage.getItem("sidebarCollapsed");
-        if (saved) {
-          setSidebarCollapsed(JSON.parse(saved));
-        }
+    const saved = localStorage.getItem("sidebarCollapsed");
+    if (saved) {
+      setSidebarCollapsed(JSON.parse(saved));
+    }
+  }, []);
 
-        // Get initial user
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        setUser(user);
-        setAuthInitialized(true);
-      } catch (error) {
-        // Silently handle errors during initialization
-        setUser(null);
-        setAuthInitialized(true);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeApp();
-
-    // Auth state listener
+  // Handle sign out and clear cache on auth state changes
+  useEffect(() => {
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(
-        "Auth event:",
-        event,
-        "User:",
-        session?.user?.email,
-        "Pathname:",
-        pathname
-      );
-
+    } = supabase.auth.onAuthStateChange(async (event) => {
       if (event === "SIGNED_OUT") {
         setIsSigningOut(true);
-        setUser(null);
-        setAuthInitialized(true);
         // Clear cache safely when signing out
         dataCache.clearAllSafe();
         // Force redirect to home page
         window.location.href = "/";
-      } else if (event === "SIGNED_IN") {
-        setUser(session?.user ?? null);
-        setIsLoading(false);
-        setIsSigningOut(false);
-        setAuthInitialized(true);
-
-        // Let middleware handle redirects instead of client-side redirects
-        // This prevents the race condition
-      } else if (event === "TOKEN_REFRESHED") {
-        setUser(session?.user ?? null);
-        setIsLoading(false);
-        setIsSigningOut(false);
-        setAuthInitialized(true);
-      } else {
-        setUser(session?.user ?? null);
-        setIsLoading(false);
-        setIsSigningOut(false);
-        setAuthInitialized(true);
       }
     });
 
@@ -176,7 +129,7 @@ export function Navbar({ children }: NavbarProps) {
 
   /* 
   // Show loading spinner during initial load, sign out, or when auth not initialized
-  if (isLoading || isSigningOut || !authInitialized) {
+  if (isLoading || isSigningOut || !isAuthInitialized) {
     return (
       <div className="flex h-screen bg-gray-50 items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
@@ -268,6 +221,32 @@ export function Navbar({ children }: NavbarProps) {
               })}
             </nav>
 
+            {/* Admin Section - Only visible to root user */}
+            {isRootUser && (
+              <>
+                <div className="px-4">
+                  <hr className="border-gray-200" />
+                </div>
+                <div className="px-4 py-4 space-y-2">
+                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-4">
+                    {sidebarCollapsed ? "Admin" : "Administration"}
+                  </p>
+                  <Link
+                    href="/invite"
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                      pathname === "/invite"
+                        ? "bg-green-50 text-green-700 border-r-4 border-green-700"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                    }`}
+                    title={sidebarCollapsed ? "Invite User" : undefined}
+                  >
+                    <UserPlus className="h-5 w-5 flex-shrink-0" />
+                    {!sidebarCollapsed && <span>Invite User</span>}
+                  </Link>
+                </div>
+              </>
+            )}
+
             {/* Company Information */}
             {!sidebarCollapsed && (
               <div className="px-4 pb-6">
@@ -338,6 +317,32 @@ export function Navbar({ children }: NavbarProps) {
                 })}
               </nav>
 
+              {/* Admin Section - Mobile */}
+              {isRootUser && (
+                <>
+                  <div className="px-4">
+                    <hr className="border-gray-200" />
+                  </div>
+                  <div className="px-4 py-4 space-y-2">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-4">
+                      Administration
+                    </p>
+                    <Link
+                      href="/invite"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                        pathname === "/invite"
+                          ? "bg-green-50 text-green-700"
+                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                      }`}
+                    >
+                      <UserPlus className="h-5 w-5" />
+                      <span>Invite User</span>
+                    </Link>
+                  </div>
+                </>
+              )}
+
               {/* Company Information */}
               <div className="px-4 pb-6">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
@@ -387,8 +392,16 @@ export function Navbar({ children }: NavbarProps) {
 
               <div className="hidden lg:block">
                 <h1 className="text-xl font-semibold text-gray-900">
-                  {navItems.find((item) => item.href === pathname)?.label ||
-                    "Dashboard"}
+                  {(() => {
+                    // Handle special admin routes
+                    if (pathname === "/invite") return "Invite User";
+
+                    // Handle regular nav items
+                    const navItem = navItems.find(
+                      (item) => item.href === pathname
+                    );
+                    return navItem?.label || "Dashboard";
+                  })()}
                 </h1>
               </div>
 
@@ -470,16 +483,8 @@ export function Navbar({ children }: NavbarProps) {
               </div>
               <div className="flex items-center space-x-4">
                 <Link href="/login">
-                  <Button
-                    variant="ghost"
-                    className="text-gray-600 hover:text-gray-900"
-                  >
-                    Sign In
-                  </Button>
-                </Link>
-                <Link href="/signup">
                   <Button className="bg-blue-600 hover:bg-blue-700">
-                    Get Started
+                    Log In
                   </Button>
                 </Link>
               </div>

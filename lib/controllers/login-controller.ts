@@ -8,10 +8,6 @@ export interface LoginFormData {
 export interface LoginPageContent {
   title: string;
   subtitle: string;
-  signupLink: {
-    text: string;
-    href: string;
-  };
   card: {
     title: string;
     description: string;
@@ -30,11 +26,7 @@ export class LoginController {
 
   private readonly pageContent: LoginPageContent = {
     title: "Sign in to your account",
-    subtitle: "Or",
-    signupLink: {
-      text: "create a new account",
-      href: "/signup",
-    },
+    subtitle: "Access your dashboard and manage your properties.",
     card: {
       title: "Login",
       description: "Enter your email and password to access your account",

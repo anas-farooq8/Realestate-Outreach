@@ -45,19 +45,32 @@ export async function middleware(request: NextRequest) {
       "/email-templates",
       "/proposals",
     ];
-    const authRoutes = ["/login", "/signup", "/"];
+    const authRoutes = ["/login", "/"];
+    const inviteRoutes = ["/invite"]; // Only accessible to root user
 
     const isProtectedRoute = protectedRoutes.some((route) =>
       pathname.startsWith(route)
     );
     const isAuthRoute = authRoutes.includes(pathname);
+    const isInviteRoute = inviteRoutes.some((route) =>
+      pathname.startsWith(route)
+    );
 
     // If there's an auth error or no user, and trying to access protected routes
-    if ((error || !user) && isProtectedRoute) {
+    if ((error || !user) && (isProtectedRoute || isInviteRoute)) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
-      // Removed the redirectTo parameter - no query params added
       return NextResponse.redirect(url);
+    }
+
+    // Check if user is trying to access invite routes
+    if (user && !error && isInviteRoute) {
+      const rootUserEmail = process.env.ROOT_USER_EMAIL;
+      if (!rootUserEmail || user.email !== rootUserEmail) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        return NextResponse.redirect(url);
+      }
     }
 
     // If user is authenticated and trying to access auth routes, redirect to dashboard
