@@ -120,7 +120,8 @@ export default function EmailTemplatesPage() {
   const { toast } = useToast();
   const supabase = createClient();
 
-  const ITEMS_PER_PAGE = 20;
+  // Dynamically set items per page based on device
+  const ITEMS_PER_PAGE = isMobile ? 10 : 20;
 
   // Check if mobile
   useEffect(() => {
@@ -583,7 +584,8 @@ export default function EmailTemplatesPage() {
               Email Templates
             </h1>
             <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-600">
-              Create and manage email templates for your outreach campaigns
+              Create, edit, and manage your email templates. Use status toggles
+              to activate or deactivate templates.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -610,22 +612,12 @@ export default function EmailTemplatesPage() {
 
         {/* Search and Filters Section */}
         <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center text-lg md:text-xl">
-              <Mail className="mr-2 h-5 w-5" />
-              Template Management
-            </CardTitle>
-            <CardDescription className="text-sm">
-              Create, edit, and manage your email templates. Use status toggles
-              to activate or deactivate templates.
-            </CardDescription>
-          </CardHeader>
           <CardContent className="space-y-4">
             {/* Search Bar */}
-            <div className="relative">
+            <div className="relative mt-4">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
-                placeholder="Search templates by name, subject, or hook..."
+                placeholder="Search by name, subject, or hook..."
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
                 className="pl-10"
@@ -904,7 +896,11 @@ export default function EmailTemplatesPage() {
                                 }
                                 size="sm"
                                 onClick={() => setCurrentPage(pageNum)}
-                                className="w-8 h-8 p-0 text-xs md:text-sm"
+                                className={`w-8 h-8 p-0 text-xs md:text-sm ${
+                                  currentPage === pageNum
+                                    ? "font-bold !w-10 !h-8 !min-w-0"
+                                    : ""
+                                }`}
                               >
                                 {pageNum}
                               </Button>
@@ -934,7 +930,13 @@ export default function EmailTemplatesPage() {
 
       {/* Create/Edit Template Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className={
+            isMobile
+              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
+              : "max-w-2xl max-h-[90vh] overflow-y-auto"
+          }
+        >
           <DialogHeader>
             <DialogTitle>
               {editingTemplate
@@ -1029,7 +1031,7 @@ export default function EmailTemplatesPage() {
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button
               variant="outline"
               onClick={handleCloseDialog}
@@ -1082,7 +1084,13 @@ export default function EmailTemplatesPage() {
 
       {/* Preview Template Dialog */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent
+          className={
+            isMobile
+              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
+              : "max-w-2xl max-h-[90vh] overflow-y-auto"
+          }
+        >
           <DialogHeader>
             <DialogTitle>Email Template Preview</DialogTitle>
             <DialogDescription>
