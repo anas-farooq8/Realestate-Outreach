@@ -27,12 +27,15 @@ import {
   ChevronRight,
   FileText,
   UserPlus,
+  X,
+  Globe,
 } from "lucide-react";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetClose,
 } from "@/components/ui/sheet";
 
 interface NavbarProps {
@@ -133,6 +136,16 @@ export function Navbar({ children }: NavbarProps) {
     return email?.split("@")[0] || "User";
   };
 
+  // Get current page title
+  const getCurrentPageTitle = () => {
+    // Handle special admin routes
+    if (pathname === "/invite") return "Invite User";
+
+    // Handle regular nav items
+    const navItem = navItems.find((item) => item.href === pathname);
+    return navItem?.label || "Dashboard";
+  };
+
   /* 
   // Show loading spinner during initial load, sign out, or when auth not initialized
   if (isLoading || isSigningOut || !isAuthInitialized) {
@@ -174,8 +187,8 @@ export function Navbar({ children }: NavbarProps) {
         {/* Desktop Sidebar */}
         <div
           className={`hidden lg:flex lg:flex-col ${
-            sidebarCollapsed ? "lg:w-20" : "lg:w-64"
-          } transition-all duration-300`}
+            sidebarCollapsed ? "lg:w-20" : "lg:w-72"
+          } transition-all duration-300 ease-in-out`}
         >
           <div className="flex flex-col flex-1 bg-white shadow-lg">
             {/* Logo Section */}
@@ -297,17 +310,21 @@ export function Navbar({ children }: NavbarProps) {
                     <div className="space-y-1">
                       <a
                         href="mailto:tbmmoutreach@gmail.com"
-                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                        className="flex items-center justify-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
                       >
-                        tbmmoutreach@gmail.com
+                        <Mail className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">tbmmoutreach@gmail.com</span>
                       </a>
                       <a
                         href="https://www.totalbodymobilemassage.com"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                        className="flex items-center justify-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
                       >
-                        www.totalbodymobilemassage.com
+                        <Globe className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">
+                          totalbodymobilemassage.com
+                        </span>
                       </a>
                     </div>
                   </div>
@@ -319,12 +336,12 @@ export function Navbar({ children }: NavbarProps) {
 
         {/* Mobile Sidebar */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-          <SheetContent side="left" className="w-64 p-0">
+          <SheetContent side="left" className="w-64 p-0 [&>button]:hidden">
             <SheetHeader className="sr-only">
               <SheetTitle>Navigation Menu</SheetTitle>
             </SheetHeader>
             <div className="flex flex-col h-full bg-white">
-              <div className="flex items-center h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
+              <div className="flex items-center justify-between h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
                 <div className="flex items-center space-x-3">
                   <div className="p-1.5 bg-white/20 rounded-lg">
                     <Home className="h-6 w-6 text-white" />
@@ -333,6 +350,14 @@ export function Navbar({ children }: NavbarProps) {
                     RealEstate OutReach
                   </span>
                 </div>
+                <Button
+                  onClick={() => setMobileMenuOpen(false)}
+                  variant="ghost"
+                  size="sm"
+                  className="text-white hover:bg-white/20 p-1.5"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
               <nav className="flex-1 px-4 py-6 space-y-2">
                 {navItems.map((item) => {
@@ -382,30 +407,38 @@ export function Navbar({ children }: NavbarProps) {
                 </>
               )}
 
-              {/* Company Information */}
+              {/* Company Information - Mobile */}
               <div className="px-4 pb-6">
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
-                  <div className="text-center space-y-2">
-                    <h4 className="text-sm font-semibold text-gray-800">
-                      Total Body Mobile Massage
-                    </h4>
-                    <p className="text-xs text-gray-600 font-medium">
-                      Outreach Team
-                    </p>
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
+                  <div className="p-3 space-y-3">
+                    <div className="text-center">
+                      <h4 className="text-sm font-semibold text-gray-800">
+                        Total Body Mobile Massage
+                      </h4>
+                      <p className="text-xs text-gray-600 font-medium">
+                        Outreach Team
+                      </p>
+                    </div>
                     <div className="space-y-1">
                       <a
                         href="mailto:tbmmoutreach@gmail.com"
-                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                        className="flex items-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors p-2 hover:bg-blue-50 rounded"
                       >
-                        tbmmoutreach@gmail.com
+                        <Mail className="h-3 w-3 flex-shrink-0" />
+                        <span className="flex-1 min-w-0 truncate">
+                          tbmmoutreach@gmail.com
+                        </span>
                       </a>
                       <a
                         href="https://www.totalbodymobilemassage.com"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="block text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors"
+                        className="flex items-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors p-2 hover:bg-blue-50 rounded"
                       >
-                        www.totalbodymobilemassage.com
+                        <Globe className="h-3 w-3 flex-shrink-0" />
+                        <span className="flex-1 min-w-0 truncate">
+                          totalbodymobilemassage.com
+                        </span>
                       </a>
                     </div>
                   </div>
@@ -420,27 +453,19 @@ export function Navbar({ children }: NavbarProps) {
           {/* Top Bar */}
           <header className="bg-white shadow-sm border-b border-gray-200 h-16">
             <div className="flex items-center justify-between h-full px-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="lg:hidden"
-                onClick={() => setMobileMenuOpen(true)}
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="lg:hidden"
+                  onClick={() => setMobileMenuOpen(true)}
+                >
+                  <Menu className="h-5 w-5" />
+                </Button>
 
-              <div className="hidden lg:block">
-                <h1 className="text-xl font-semibold text-gray-900">
-                  {(() => {
-                    // Handle special admin routes
-                    if (pathname === "/invite") return "Invite User";
-
-                    // Handle regular nav items
-                    const navItem = navItems.find(
-                      (item) => item.href === pathname
-                    );
-                    return navItem?.label || "Dashboard";
-                  })()}
+                {/* Page title for both mobile and desktop */}
+                <h1 className="text-lg md:text-xl font-semibold text-gray-900">
+                  {getCurrentPageTitle()}
                 </h1>
               </div>
 
