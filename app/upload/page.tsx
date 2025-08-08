@@ -258,13 +258,14 @@ export default function UploadPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">
+    <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="space-y-6 sm:space-y-8">
+        {/* Header */}
+        <div className="text-center sm:text-left">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
             Upload Property Image
           </h1>
-          <p className="mt-2 text-gray-600">
+          <p className="mt-2 text-sm sm:text-base text-gray-600">
             Upload an image containing property names to extract and enrich
             contact information
           </p>
@@ -272,64 +273,66 @@ export default function UploadPage() {
 
         {/* Image Upload */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center space-x-2 text-lg">
               <ImageIcon className="h-5 w-5" />
               <span>Step 1: Upload Image</span>
             </CardTitle>
-            <CardDescription>
-              Select an image file (JPEG or PNG) containing property or
-              community names
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="flex items-center space-x-4">
-                <div className="flex-1">
+              {/* Upload Section */}
+              <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
+                {/* File Input */}
+                <div className="flex-1 sm:flex-[3]">
                   <Label
                     htmlFor="image-upload"
-                    className="block text-sm font-medium text-gray-700 mb-2"
+                    className="block text-sm font-medium text-gray-700 mb-1"
                   >
                     Choose Image File
                   </Label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    PNG, JPG up to 10MB
+                  </p>
                   <Input
                     id="image-upload"
                     type="file"
                     accept="image/*"
                     onChange={handleFileSelect}
-                    className="w-full cursor-pointer h-13 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-700 file:cursor-pointer"
+                    className="w-full cursor-pointer h-10 file:mr-4 file:py-2 file:px-4 file:rounded-none file:border-0 file:shadow-none file:bg-transparent file:text-gray-700 file:font-medium file:cursor-pointer"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
-                    PNG, JPG up to 10MB
-                  </p>
                 </div>
-                <Button
-                  onClick={handleExtractNames}
-                  disabled={!selectedFile || isExtracting}
-                  variant="outline"
-                >
-                  {isExtracting ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
-                      Extracting...
-                    </>
-                  ) : (
-                    <>
-                      <ImageIcon className="mr-2 h-4 w-4" />
-                      Extract Names
-                    </>
-                  )}
-                </Button>
+                <div className="sm:flex-1">
+                  <Button
+                    onClick={handleExtractNames}
+                    disabled={!selectedFile || isExtracting}
+                    variant="outline"
+                    className="w-full h-10 min-w-[120px] !p-0 flex items-center justify-center"
+                  >
+                    {isExtracting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <ImageIcon className="mr-2 h-4 w-4" />
+                        Extract Names
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
+              {/* Image Preview */}
               {imagePreview && (
                 <div className="space-y-2">
                   <Label>Image Preview</Label>
-                  <div className="border rounded-lg p-4 bg-white">
+                  <div className="border rounded-lg p-2 sm:p-4 bg-white">
                     <img
                       src={imagePreview}
                       alt="Upload preview"
-                      className="max-w-full h-auto max-h-96 mx-auto rounded shadow-sm"
+                      className="w-full h-auto max-h-64 sm:max-h-96 mx-auto rounded shadow-sm object-contain"
                     />
                   </div>
                 </div>
@@ -341,16 +344,23 @@ export default function UploadPage() {
         {/* Extracted Names */}
         {extractedProperties.length > 0 && (
           <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
+            <CardHeader className="pb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                 <div>
-                  <CardTitle>Step 2: Review & Edit Property Names</CardTitle>
-                  <CardDescription>
+                  <CardTitle className="text-lg">
+                    Step 2: Review & Edit Property Names
+                  </CardTitle>
+                  <CardDescription className="text-sm">
                     Review the extracted property names. You can edit or remove
                     any entries before processing.
                   </CardDescription>
                 </div>
-                <Button onClick={handleAddProperty} size="sm" variant="outline">
+                <Button
+                  onClick={handleAddProperty}
+                  size="sm"
+                  variant="outline"
+                  className="w-full sm:w-auto"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Add Property
                 </Button>
@@ -358,17 +368,105 @@ export default function UploadPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="rounded-md border max-h-96 overflow-y-auto">
+                {/* Mobile-friendly property list */}
+                <div className="max-h-96 overflow-y-auto space-y-3 sm:hidden border rounded-lg p-3">
+                  {extractedProperties.map((property, idx) => (
+                    <div
+                      key={property.id}
+                      className="border rounded-lg p-3 bg-gray-50 flex items-start gap-3"
+                    >
+                      <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded bg-gray-200 text-gray-600 font-semibold text-sm mt-1">
+                        {idx + 1}
+                      </div>
+                      <div className="flex-1 space-y-3">
+                        {editingId === property.id ? (
+                          <Input
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter")
+                                handleSaveEdit(property.id);
+                              if (e.key === "Escape")
+                                handleCancelEdit(property.id);
+                            }}
+                            className="w-full"
+                            autoFocus
+                          />
+                        ) : (
+                          <div className="font-medium text-gray-900 truncate max-w-[240px]">
+                            {property.name}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          {editingId === property.id ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSaveEdit(property.id)}
+                                className="flex-1"
+                              >
+                                <Check className="h-4 w-4 mr-1" />
+                                Save
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCancelEdit(property.id)}
+                                className="flex-1"
+                              >
+                                <X className="h-4 w-4 mr-1" />
+                                Cancel
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleEditProperty(property.id, property.name)
+                                }
+                                className="flex-1"
+                              >
+                                <Edit2 className="h-4 w-4 mr-1" />
+                                Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() =>
+                                  handleRemoveProperty(property.id)
+                                }
+                                className="flex-1"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Remove
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop table view */}
+                <div className="hidden sm:block rounded-md border max-h-96 overflow-y-auto">
                   <Table>
                     <TableHeader className="sticky top-0 bg-white z-10">
                       <TableRow>
+                        <TableHead className="w-12 text-center">#</TableHead>
                         <TableHead>Property Name</TableHead>
                         <TableHead className="w-32">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {extractedProperties.map((property) => (
+                      {extractedProperties.map((property, idx) => (
                         <TableRow key={property.id}>
+                          <TableCell className="text-center font-semibold text-gray-500">
+                            {idx + 1}
+                          </TableCell>
                           <TableCell>
                             {editingId === property.id ? (
                               <Input
@@ -386,7 +484,7 @@ export default function UploadPage() {
                                 autoFocus
                               />
                             ) : (
-                              <span className="font-medium">
+                              <span className="font-medium truncate max-w-[720px] block">
                                 {property.name}
                               </span>
                             )}
@@ -445,20 +543,28 @@ export default function UploadPage() {
                   </Table>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="parent-address">Parent Address</Label>
+                {/* Parent Address Input */}
+                <div className="space-y-2 pt-4 border-t border-gray-200">
+                  <Label
+                    htmlFor="parent-address"
+                    className="text-sm font-medium"
+                  >
+                    Parent Address
+                  </Label>
                   <Input
                     id="parent-address"
                     placeholder="e.g., Palm Beach County, Florida"
                     value={parentAddress}
                     onChange={(e) => setParentAddress(e.target.value)}
+                    className="w-full"
                   />
-                  <p className="text-sm text-gray-500">
+                  <p className="text-xs text-gray-500">
                     Enter the general location (city, county, state) where these
                     properties are located
                   </p>
                 </div>
 
+                {/* Process Button */}
                 <Button
                   onClick={handleProcessProperties}
                   disabled={
