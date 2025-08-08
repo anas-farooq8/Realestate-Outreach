@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Navbar } from "@/components/navbar";
-import { AuthProvider } from "@/contexts/auth-context";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -20,16 +19,6 @@ export const metadata = {
   formatDetection: {
     telephone: false,
   },
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-  },
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#3b82f6" },
-    { media: "(prefers-color-scheme: dark)", color: "#1d4ed8" },
-  ],
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -44,6 +33,17 @@ export const metadata = {
   },
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#3b82f6" },
+    { media: "(prefers-color-scheme: dark)", color: "#1d4ed8" },
+  ],
+};
+
 export default function RootLayout({
   children,
 }: {
@@ -55,9 +55,7 @@ export default function RootLayout({
         className={`${inter.className} touch-manipulation tap-highlight-none`}
         suppressHydrationWarning={true}
       >
-        <AuthProvider>
-          <Navbar>{children}</Navbar>
-        </AuthProvider>
+        <Navbar>{children}</Navbar>
         <Toaster />
       </body>
     </html>

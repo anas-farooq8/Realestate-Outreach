@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/contexts/auth-context";
+import { useCachedAuth } from "@/hooks/use-cached-data";
 import {
   InviteController,
   type InviteUser,
@@ -16,7 +16,7 @@ export function useInviteController() {
     isSubmitting: false,
   });
 
-  const { user, isRootUser, isAuthInitialized } = useAuth();
+  const { user, isRootUser, isAuthInitialized } = useCachedAuth();
   const { toast } = useToast();
   const router = useRouter();
 

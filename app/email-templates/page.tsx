@@ -31,6 +31,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,15 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination";
+
 import { useToast } from "@/hooks/use-toast";
 import { useCachedEmailTemplates } from "@/hooks/use-cached-data";
 import { dataCache } from "@/lib/cache";
@@ -68,11 +66,17 @@ import {
   Eye,
   Filter,
   Search,
+  Mail,
+  ArrowUp,
+  ArrowDown,
+  MoreVertical,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import type { EmailTemplate } from "@/lib/types";
 
 type FilterType = "all" | "active" | "inactive";
-type SortField = "created_at" | "updated_at";
+type SortField = "created_at" | "updated_at" | "template_name";
 type SortOrder = "asc" | "desc";
 
 export default function EmailTemplatesPage() {
@@ -103,6 +107,7 @@ export default function EmailTemplatesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [isMobile, setIsMobile] = useState(false);
   const [formData, setFormData] = useState({
     template_name: "",
     subject: "",
@@ -116,6 +121,17 @@ export default function EmailTemplatesPage() {
   const supabase = createClient();
 
   const ITEMS_PER_PAGE = 20;
+
+  // Check if mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Sync local templates with cached data when it changes
   useEffect(() => {
@@ -490,104 +506,102 @@ export default function EmailTemplatesPage() {
     setCurrentPage(1);
   };
 
-  const renderPaginationItems = () => {
-    const items = [];
-    const maxVisiblePages = 5;
+  // Template Card Component for Mobile
+  const TemplateCard = ({ template }: { template: EmailTemplate }) => (
+    <Card key={template.id} className="mb-4">
+      <CardContent className="p-4">
+        <div className="space-y-3">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-gray-900 truncate">
+                {template.template_name}
+              </h3>
+              <p className="text-sm text-gray-600 mt-1 truncate">
+                {template.subject || "No subject"}
+              </p>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="ml-2">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handlePreview(template)}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  Preview
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleOpenDialog(template)}>
+                  <Edit2 className="h-4 w-4 mr-2" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => handleDeleteClick(template)}
+                  className="text-red-600"
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-    if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i++) {
-        items.push(
-          <PaginationItem key={i}>
-            <PaginationLink
-              onClick={() => setCurrentPage(i)}
-              isActive={currentPage === i}
-              className="cursor-pointer"
-            >
-              {i}
-            </PaginationLink>
-          </PaginationItem>
-        );
-      }
-    } else {
-      items.push(
-        <PaginationItem key={1}>
-          <PaginationLink
-            onClick={() => setCurrentPage(1)}
-            isActive={currentPage === 1}
-            className="cursor-pointer"
-          >
-            1
-          </PaginationLink>
-        </PaginationItem>
-      );
+          {template.hook && (
+            <p className="text-sm text-gray-600 line-clamp-2">
+              <span className="font-medium">Hook:</span> {template.hook}
+            </p>
+          )}
 
-      if (currentPage > 3) {
-        items.push(<PaginationEllipsis key="ellipsis1" />);
-      }
-
-      const start = Math.max(2, currentPage - 1);
-      const end = Math.min(totalPages - 1, currentPage + 1);
-
-      for (let i = start; i <= end; i++) {
-        items.push(
-          <PaginationItem key={i}>
-            <PaginationLink
-              onClick={() => setCurrentPage(i)}
-              isActive={currentPage === i}
-              className="cursor-pointer"
-            >
-              {i}
-            </PaginationLink>
-          </PaginationItem>
-        );
-      }
-
-      if (currentPage < totalPages - 2) {
-        items.push(<PaginationEllipsis key="ellipsis2" />);
-      }
-
-      if (totalPages > 1) {
-        items.push(
-          <PaginationItem key={totalPages}>
-            <PaginationLink
-              onClick={() => setCurrentPage(totalPages)}
-              isActive={currentPage === totalPages}
-              className="cursor-pointer"
-            >
-              {totalPages}
-            </PaginationLink>
-          </PaginationItem>
-        );
-      }
-    }
-
-    return items;
-  };
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Switch
+                checked={template.is_active}
+                onCheckedChange={(checked) =>
+                  handleToggleActive(template, checked)
+                }
+              />
+              <Badge variant={template.is_active ? "default" : "secondary"}>
+                {template.is_active ? "Active" : "Inactive"}
+              </Badge>
+            </div>
+            <div className="text-xs text-gray-500">
+              {new Date(template.updated_at).toLocaleDateString()}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   return (
-    <div className="p-6">
-      <div className="space-y-8">
-        <div className="flex justify-between items-center">
+    <div className="p-3 md:p-6">
+      <div className="space-y-6 md:space-y-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
               Email Templates
             </h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-600">
               Create and manage email templates for your outreach campaigns
             </p>
           </div>
-          <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
             <Button
               onClick={handleRefresh}
               variant="outline"
               disabled={refreshing}
+              className="hidden sm:flex w-full sm:w-auto"
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
               />
               Refresh
             </Button>
-            <Button onClick={() => handleOpenDialog()}>
+            <Button
+              onClick={() => handleOpenDialog()}
+              className="w-full sm:w-auto"
+            >
               <Plus className="mr-2 h-4 w-4" />
               New Template
             </Button>
@@ -596,101 +610,126 @@ export default function EmailTemplatesPage() {
 
         {/* Search and Filters Section */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              {/* Search Bar - First Row */}
-              <div className="flex items-center space-x-2">
-                <Search className="h-5 w-5 text-gray-400" />
-                <Input
-                  placeholder="Search templates by name, subject, or hook..."
-                  value={searchTerm}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  className="max-w-md"
-                />
-              </div>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center text-lg md:text-xl">
+              <Mail className="mr-2 h-5 w-5" />
+              Template Management
+            </CardTitle>
+            <CardDescription className="text-sm">
+              Create, edit, and manage your email templates. Use status toggles
+              to activate or deactivate templates.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                placeholder="Search templates by name, subject, or hook..."
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="pl-10"
+              />
+            </div>
 
-              {/* Filter and Sort Options - Second Row */}
+            {/* Filter and Sort Controls */}
+            <div className="space-y-4">
               <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-                <div className="flex flex-wrap gap-4 items-center">
-                  {/* Status Filter */}
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
                   <div className="flex items-center space-x-2">
                     <Filter className="h-4 w-4 text-gray-500" />
-                    <Label
-                      htmlFor="status-filter"
-                      className="text-sm font-medium"
-                    >
+                    <Label className="text-sm font-medium text-gray-500">
                       Status:
                     </Label>
-                    <Select value={filter} onValueChange={handleFilterChange}>
-                      <SelectTrigger className="w-32">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="inactive">Inactive</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
-
-                  {/* Sort Options */}
-                  <div className="flex items-center space-x-2">
-                    <Label className="text-sm font-medium text-gray-500">
-                      Sort by:
-                    </Label>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant={
-                          sortField === "created_at" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => handleSortChange("created_at")}
-                        className="flex items-center space-x-1"
-                      >
-                        <span>Created</span>
-                        {sortField === "created_at" && (
-                          <span className="text-xs">
-                            {sortOrder === "asc" ? "↑" : "↓"}
-                          </span>
-                        )}
-                      </Button>
-                      <Button
-                        variant={
-                          sortField === "updated_at" ? "default" : "outline"
-                        }
-                        size="sm"
-                        onClick={() => handleSortChange("updated_at")}
-                        className="flex items-center space-x-1"
-                      >
-                        <span>Updated</span>
-                        {sortField === "updated_at" && (
-                          <span className="text-xs">
-                            {sortOrder === "asc" ? "↑" : "↓"}
-                          </span>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
+                  <Select value={filter} onValueChange={handleFilterChange}>
+                    <SelectTrigger className="w-full sm:w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="inactive">Inactive</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
-                {/* Results Count */}
-                <div className="text-sm text-gray-500">
-                  Showing {paginatedTemplates.length} of{" "}
-                  {filteredAndSortedTemplates.length} templates
+                <div className="text-sm text-gray-500 text-center sm:text-right">
+                  {filteredAndSortedTemplates.length} template
+                  {filteredAndSortedTemplates.length !== 1 ? "s" : ""} found
+                </div>
+              </div>
+
+              {/* Sort Options */}
+              <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                <div className="flex items-center space-x-2">
+                  <Label className="text-sm font-medium text-gray-500">
+                    Sort by:
+                  </Label>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    variant={sortField === "created_at" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSortChange("created_at")}
+                    className="flex items-center space-x-1 flex-1 sm:flex-initial"
+                  >
+                    <span>Created</span>
+                    {sortField === "created_at" &&
+                      (sortOrder === "asc" ? (
+                        <ArrowUp className="h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3" />
+                      ))}
+                  </Button>
+                  <Button
+                    variant={sortField === "updated_at" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleSortChange("updated_at")}
+                    className="flex items-center space-x-1 flex-1 sm:flex-initial"
+                  >
+                    <span>Updated</span>
+                    {sortField === "updated_at" &&
+                      (sortOrder === "asc" ? (
+                        <ArrowUp className="h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3" />
+                      ))}
+                  </Button>
+                  <Button
+                    variant={
+                      sortField === "template_name" ? "default" : "outline"
+                    }
+                    size="sm"
+                    onClick={() => handleSortChange("template_name")}
+                    className="flex items-center space-x-1 flex-1 sm:flex-initial"
+                  >
+                    <span>Name</span>
+                    {sortField === "template_name" &&
+                      (sortOrder === "asc" ? (
+                        <ArrowUp className="h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="h-3 w-3" />
+                      ))}
+                  </Button>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Templates Table */}
+        {/* Templates List */}
         <Card>
-          <CardHeader>
-            <CardTitle>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg md:text-xl">
               Email Templates ({filteredAndSortedTemplates.length})
             </CardTitle>
-            <CardDescription>
-              Manage your email templates for outreach campaigns
+            <CardDescription className="text-sm">
+              {filteredAndSortedTemplates.length !== templates.length &&
+                `Showing ${filteredAndSortedTemplates.length} of ${templates.length} templates`}
+              {paginatedTemplates.length > 0 &&
+                totalPages > 1 &&
+                ` • Page ${currentPage} of ${totalPages}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -714,119 +753,177 @@ export default function EmailTemplatesPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Template Name</TableHead>
-                        <TableHead>Subject</TableHead>
-                        <TableHead>Hook</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Updated</TableHead>
-                        <TableHead className="w-32">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedTemplates.map((template) => (
-                        <TableRow key={template.id}>
-                          <TableCell className="font-medium max-w-xs truncate">
-                            {template.template_name}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {template.subject || "—"}
-                          </TableCell>
-                          <TableCell className="max-w-xs truncate">
-                            {template.hook || "—"}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center space-x-2">
-                              <Switch
-                                checked={template.is_active}
-                                onCheckedChange={(checked) =>
-                                  handleToggleActive(template, checked)
-                                }
-                              />
-                              <Badge
-                                variant={
-                                  template.is_active ? "default" : "secondary"
-                                }
-                              >
-                                {template.is_active ? "Active" : "Inactive"}
-                              </Badge>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {new Date(template.created_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            {new Date(template.updated_at).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button
-                                onClick={() => handlePreview(template)}
-                                size="sm"
-                                variant="outline"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleOpenDialog(template)}
-                                size="sm"
-                                variant="outline"
-                              >
-                                <Edit2 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteClick(template)}
-                                size="sm"
-                                variant="outline"
-                                className="text-red-600 hover:text-red-700 hover:border-red-300"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+                {/* Mobile View - Cards */}
+                {isMobile ? (
+                  <div className="md:hidden">
+                    {paginatedTemplates.map((template) => (
+                      <TemplateCard key={template.id} template={template} />
+                    ))}
+                  </div>
+                ) : (
+                  /* Desktop View - Table */
+                  <div className="hidden md:block rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Template Name</TableHead>
+                          <TableHead>Subject</TableHead>
+                          <TableHead>Hook</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Created</TableHead>
+                          <TableHead>Updated</TableHead>
+                          <TableHead className="w-32">Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedTemplates.map((template) => (
+                          <TableRow key={template.id}>
+                            <TableCell className="font-medium max-w-xs truncate">
+                              {template.template_name}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {template.subject || "—"}
+                            </TableCell>
+                            <TableCell className="max-w-xs truncate">
+                              {template.hook || "—"}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center space-x-2">
+                                <Switch
+                                  checked={template.is_active}
+                                  onCheckedChange={(checked) =>
+                                    handleToggleActive(template, checked)
+                                  }
+                                />
+                                <Badge
+                                  variant={
+                                    template.is_active ? "default" : "secondary"
+                                  }
+                                >
+                                  {template.is_active ? "Active" : "Inactive"}
+                                </Badge>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {new Date(
+                                template.created_at
+                              ).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              {new Date(
+                                template.updated_at
+                              ).toLocaleDateString()}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button
+                                  onClick={() => handlePreview(template)}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  onClick={() => handleOpenDialog(template)}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  <Edit2 className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  onClick={() => handleDeleteClick(template)}
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-600 hover:text-red-700 hover:border-red-300"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
 
+                {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="mt-6 flex justify-center">
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            onClick={() =>
-                              setCurrentPage(Math.max(1, currentPage - 1))
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-6 gap-4">
+                    <div className="text-sm text-gray-500 text-center sm:text-left">
+                      Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
+                      {Math.min(
+                        currentPage * ITEMS_PER_PAGE,
+                        filteredAndSortedTemplates.length
+                      )}{" "}
+                      of {filteredAndSortedTemplates.length} results
+                    </div>
+
+                    <div className="flex items-center justify-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                        className="flex items-center"
+                      >
+                        <span className="hidden sm:inline">Previous</span>
+                        <span className="sm:hidden">Prev</span>
+                      </Button>
+
+                      <div className="flex items-center space-x-1">
+                        {Array.from(
+                          { length: Math.min(isMobile ? 3 : 5, totalPages) },
+                          (_, i) => {
+                            let pageNum;
+                            const maxPages = isMobile ? 3 : 5;
+                            if (totalPages <= maxPages) {
+                              pageNum = i + 1;
+                            } else if (
+                              currentPage <=
+                              Math.floor(maxPages / 2) + 1
+                            ) {
+                              pageNum = i + 1;
+                            } else if (
+                              currentPage >=
+                              totalPages - Math.floor(maxPages / 2)
+                            ) {
+                              pageNum = totalPages - maxPages + 1 + i;
+                            } else {
+                              pageNum =
+                                currentPage - Math.floor(maxPages / 2) + i;
                             }
-                            className={
-                              currentPage === 1
-                                ? "pointer-events-none opacity-50"
-                                : "cursor-pointer"
-                            }
-                          />
-                        </PaginationItem>
-                        {renderPaginationItems()}
-                        <PaginationItem>
-                          <PaginationNext
-                            onClick={() =>
-                              setCurrentPage(
-                                Math.min(totalPages, currentPage + 1)
-                              )
-                            }
-                            className={
-                              currentPage === totalPages
-                                ? "pointer-events-none opacity-50"
-                                : "cursor-pointer"
-                            }
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
+
+                            return (
+                              <Button
+                                key={pageNum}
+                                variant={
+                                  currentPage === pageNum
+                                    ? "default"
+                                    : "outline"
+                                }
+                                size="sm"
+                                onClick={() => setCurrentPage(pageNum)}
+                                className="w-8 h-8 p-0 text-xs md:text-sm"
+                              >
+                                {pageNum}
+                              </Button>
+                            );
+                          }
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                        className="flex items-center"
+                      >
+                        <span className="hidden sm:inline">Next</span>
+                        <span className="sm:hidden">Next</span>
+                      </Button>
+                    </div>
                   </div>
                 )}
               </>

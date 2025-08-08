@@ -24,10 +24,6 @@ interface CacheMethodConfig<T> {
   errorMessagePrefix: string;
 }
 
-// Track hook initialization for batch monitoring
-let activeMountCount = 0;
-const mountTimes: Record<string, number> = {};
-
 // Generic hook to reduce code duplication
 function useGenericCachedData<T>(
   config: CacheMethodConfig<T>,
@@ -46,32 +42,40 @@ function useGenericCachedData<T>(
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false);
   const fetchingRef = useRef(false);
   const mountedRef = useRef(true);
 
-  // Debug: Track hook initialization (throttled to reduce noise)
+  // Debug: Track hook initialization
   useEffect(() => {
-    const initTime = Date.now();
-    activeMountCount++;
-    mountTimes[errorMessagePrefix] = initTime;
-
-    console.log(
-      `🔵 [HOOK MOUNT] ${errorMessagePrefix} hook mounted (${activeMountCount} total active)`
-    );
-
+    console.log(`🔵 [HOOK MOUNT] ${errorMessagePrefix} hook mounted`);
     return () => {
-      activeMountCount--;
-      const duration = Date.now() - initTime;
-      delete mountTimes[errorMessagePrefix];
-      console.log(
-        `🔴 [HOOK UNMOUNT] ${errorMessagePrefix} hook unmounted (lived: ${duration}ms, ${activeMountCount} remaining)`
-      );
+      console.log(`🔴 [HOOK UNMOUNT] ${errorMessagePrefix} hook unmounted`);
     };
-  }, []); // Empty deps = only on mount/unmount
+  }, [errorMessagePrefix]);
+
+  // Initialize auth through cache
+  useEffect(() => {
+    const initAuth = async () => {
+      await dataCache.initializeAuth();
+      setIsAuthInitialized(true);
+    };
+    initAuth();
+  }, []);
 
   const fetchData = useCallback(
     async (forceRefresh = false) => {
-      if (fetchingRef.current) return;
+      // Don't fetch if not authenticated or still initializing
+      if (!isAuthInitialized) {
+        console.log(
+          `🟡 [HOOK] ${errorMessagePrefix} waiting for auth initialization`
+        );
+        return;
+      }
+
+      if (fetchingRef.current) {
+        return;
+      }
 
       try {
         fetchingRef.current = true;
@@ -98,7 +102,6 @@ function useGenericCachedData<T>(
         );
 
         const dataPromise = forceRefresh ? refreshMethod() : cacheMethod();
-
         const result = await Promise.race([dataPromise, timeoutPromise]);
 
         if (mountedRef.current) {
@@ -136,12 +139,13 @@ function useGenericCachedData<T>(
       }
     },
     [
+      isAuthInitialized,
+      autoFetch,
       cacheMethod,
       refreshMethod,
       hasValidCacheMethod,
       emptyValue,
       errorMessagePrefix,
-      // Remove 'data' and 'initialLoad' to prevent infinite re-renders
     ]
   );
 
@@ -152,14 +156,15 @@ function useGenericCachedData<T>(
   useEffect(() => {
     mountedRef.current = true;
 
-    if (autoFetch) {
+    // Only fetch if auth is initialized and we have auto-fetch enabled
+    if (autoFetch && isAuthInitialized) {
       fetchData(refreshOnMount);
     }
 
     return () => {
       mountedRef.current = false;
     };
-  }, [autoFetch, refreshOnMount]); // Remove fetchData dependency to prevent infinite re-renders
+  }, [autoFetch, refreshOnMount, isAuthInitialized, fetchData]);
 
   return {
     data,
@@ -273,4 +278,89 @@ export function useCachedPdfProposals(options: UseCachedDataOptions = {}) {
   );
 
   return useGenericCachedData<PDFProposal[]>(config, options);
+}
+
+// Auth hook that uses cache exclusively
+export function useCachedAuth() {
+  const [user, setUser] = useState<any>(null);
+  const [isRootUser, setIsRootUser] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false);
+  const mountedRef = useRef(true);
+
+  // Initialize auth and subscribe to cache changes
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    const initAuth = async () => {
+      try {
+        // Initialize auth through cache
+        await dataCache.initializeAuth();
+
+        // Get initial state
+        const currentUser = dataCache.getCurrentUser();
+        const authInitialized = dataCache.getAuthInitialized();
+
+        if (mountedRef.current) {
+          setUser(currentUser);
+          setIsAuthInitialized(authInitialized);
+          setIsLoading(false);
+
+          // Only check root user status if we have a user
+          if (currentUser) {
+            const rootUserStatus = await dataCache.getIsRootUser();
+            setIsRootUser(rootUserStatus);
+          } else {
+            setIsRootUser(false);
+          }
+        }
+
+        // Subscribe to cache changes
+        unsubscribe = dataCache.addCacheChangeListener(async () => {
+          if (mountedRef.current) {
+            const updatedUser = dataCache.getCurrentUser();
+            const updatedAuthStatus = dataCache.getAuthInitialized();
+
+            setUser(updatedUser);
+            setIsAuthInitialized(updatedAuthStatus);
+
+            // Only check root user status if we have a user
+            if (updatedUser) {
+              const updatedRootStatus = await dataCache.getIsRootUser();
+              setIsRootUser(updatedRootStatus);
+            } else {
+              setIsRootUser(false);
+            }
+          }
+        });
+
+        console.log("✅ [AUTH HOOK] Auth initialization complete");
+      } catch (error) {
+        console.error("❌ [AUTH HOOK] Auth initialization error:", error);
+        if (mountedRef.current) {
+          setIsLoading(false);
+          setIsAuthInitialized(true);
+          setUser(null);
+          setIsRootUser(false);
+        }
+      }
+    };
+
+    initAuth();
+
+    return () => {
+      console.log("🔴 [AUTH HOOK] Cleanup");
+      mountedRef.current = false;
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  return {
+    user,
+    isRootUser,
+    isLoading,
+    isAuthInitialized,
+  };
 }

@@ -34,7 +34,7 @@ class DataCache {
     pdfProposals: null,
   };
 
-  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private readonly CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
   private supabase = createClient();
 
   // Service role client for storage operations (bypasses RLS)
@@ -43,17 +43,18 @@ class DataCache {
     process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY!
   );
 
-  private currentUserId: string | null = null;
-  private userIdCacheTimestamp: number = 0;
-  private readonly USER_ID_CACHE_DURATION = 60 * 1000; // Cache user ID for 1 minute
+  // Auth state for hooks and UI - no user caching, only root user status caching
+  private isAuthInitialized = false;
+  private authInitPromise: Promise<void> | null = null;
+  private currentUser: any = null;
+  private currentUserIdCache: string | null = null; // Short-term cache to prevent API spam
+  private userIdLastFetch: number = 0;
+  private readonly USER_ID_FETCH_THROTTLE = 1000; // 1 second throttle
+  private isRootUser = false;
+  private rootUserCacheTimestamp = 0;
+  private readonly ROOT_USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  // Batch initialization system
-  private initializingUser = false;
-  private lastLoggedCacheHit = 0;
-  private readonly LOG_THROTTLE = 5000; // Only log cache hits every 5 seconds
-  private pendingInitRequests: Array<(userId: string | null) => void> = [];
-
-  // Fetching flags
+  // Fetching flags to prevent concurrent requests
   private fetchingProperties = false;
   private fetchingEmailTemplates = false;
   private fetchingEmailLogs = false;
@@ -64,8 +65,13 @@ class DataCache {
   // Cache change listeners for React hooks
   private cacheChangeListeners: Array<() => void> = [];
 
+  // Throttle mechanism for PDF URL fetching
+  private pdfUrlCache: string | null = null;
+  private pdfUrlLastFetch: number = 0;
+  private readonly PDF_URL_FETCH_THROTTLE = 5000; // 5 seconds throttle
+
   constructor() {
-    console.log(`🚀 [CACHE INIT] Data cache system initialized`);
+    // Cache system initialized silently
   }
 
   // Cache change notification methods
@@ -96,8 +102,9 @@ class DataCache {
   }
 
   private isSameUser(entry: CacheEntry<any> | null): boolean {
-    if (!entry || !this.currentUserId) return false;
-    return entry.userId === this.currentUserId;
+    // Simple check - just ensure entry has a userId
+    // User validation happens at fetch time in ensureUserContext
+    return entry !== null && entry.userId !== null && entry.userId !== "";
   }
 
   // Unified cache validation helper to reduce redundant code
@@ -113,17 +120,39 @@ class DataCache {
     emptyValue: T
   ): Promise<T> {
     try {
-      const userId = await this.ensureUserContext(); // Use shared user context
+      // Always ensure user context first - this validates user exists
+      const userId = await this.ensureUserContext();
       if (!userId) {
+        console.log(`🔐 [CACHE] No authenticated user for ${cacheKey}`);
         return emptyValue;
       }
 
       const entry = this.cache[cacheKey] as CacheEntry<T> | null;
 
-      // Check if cache exists and is valid
-      if (this.isValidCache(entry)) {
-        console.log(`🟢 [CACHE HIT] Retrieved ${cacheKey} from cache`);
-        return entry!.data;
+      // Check if cache exists, is valid, and belongs to current user
+      if (entry && this.isValidCache(entry) && entry.userId === userId) {
+        const ageMinutes = Math.round((Date.now() - entry.timestamp) / 60000);
+        console.log(
+          `🟢 [CACHE HIT] ${cacheKey} (user: ${userId.substring(
+            0,
+            8
+          )}..., ${ageMinutes}min old)`
+        );
+        return entry.data;
+      }
+
+      // Log cache miss reason with timing info
+      if (!entry) {
+        console.log(`🔄 [CACHE MISS] ${cacheKey} - no entry`);
+      } else if (this.isExpired(entry)) {
+        const ageMinutes = Math.round((Date.now() - entry.timestamp) / 60000);
+        console.log(
+          `⏰ [CACHE EXPIRED] ${cacheKey} (${ageMinutes}min old, limit: ${Math.round(
+            this.CACHE_DURATION / 60000
+          )}min)`
+        );
+      } else if (entry.userId !== userId) {
+        console.log(`👤 [CACHE USER MISMATCH] ${cacheKey}`);
       }
 
       // Prevent concurrent fetches
@@ -134,12 +163,14 @@ class DataCache {
       }
 
       (this[fetchingKey] as any) = true;
-      console.log(`🔄 [DATABASE FETCH] Fetching ${cacheKey} from database`);
+      console.log(
+        `🔄 [DATABASE FETCH] ${cacheKey} (user: ${userId.substring(0, 8)}...)`
+      );
 
       try {
         const data = await fetcher();
 
-        // Cache the result
+        // Cache the result with current user ID
         (this.cache[cacheKey] as any) = {
           data,
           timestamp: Date.now(),
@@ -147,7 +178,10 @@ class DataCache {
         };
 
         console.log(
-          `✅ [DATABASE FETCH COMPLETE] ${cacheKey} cached successfully`
+          `✅ [DATABASE SUCCESS] ${cacheKey} cached (user: ${userId.substring(
+            0,
+            8
+          )}...)`
         );
         return data;
       } finally {
@@ -162,24 +196,24 @@ class DataCache {
 
   async getCurrentUserId(): Promise<string | null> {
     try {
-      // Return cached user ID if still valid
+      // Prevent API spam with short throttle - only for performance, not security
       const now = Date.now();
       if (
-        this.currentUserId &&
-        now - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
+        this.currentUserIdCache !== null &&
+        now - this.userIdLastFetch < this.USER_ID_FETCH_THROTTLE
       ) {
-        return this.currentUserId;
+        return this.currentUserIdCache;
       }
 
-      // Check if we have a session first
+      // Always get fresh user ID from Supabase
       const {
         data: { session },
         error: sessionError,
       } = await this.supabase.auth.getSession();
 
       if (sessionError || !session) {
-        this.currentUserId = null;
-        this.userIdCacheTimestamp = 0;
+        this.currentUserIdCache = null;
+        this.userIdLastFetch = now;
         return null;
       }
 
@@ -189,58 +223,33 @@ class DataCache {
       } = await this.supabase.auth.getUser();
 
       if (error || !user) {
-        this.currentUserId = null;
-        this.userIdCacheTimestamp = 0;
+        this.currentUserIdCache = null;
+        this.userIdLastFetch = now;
         return null;
       }
 
-      this.currentUserId = user.id;
-      this.userIdCacheTimestamp = now;
-      return this.currentUserId;
+      // Cache for throttle duration only
+      this.currentUserIdCache = user.id;
+      this.userIdLastFetch = now;
+      return user.id;
     } catch (error) {
       // Silently handle auth errors during sign out
-      this.currentUserId = null;
-      this.userIdCacheTimestamp = 0;
+      this.currentUserIdCache = null;
+      this.userIdLastFetch = Date.now();
       return null;
     }
   }
 
   private async ensureUserContext(): Promise<string | null> {
-    const now = Date.now();
+    // Simply get current user ID fresh - no caching
+    return await this.getCurrentUserId();
+  }
 
-    if (
-      this.currentUserId &&
-      now - this.userIdCacheTimestamp < this.USER_ID_CACHE_DURATION
-    ) {
-      return this.currentUserId;
-    }
-
-    // If already initializing, return a promise that resolves when initialization is complete
-    if (this.initializingUser) {
-      return new Promise((resolve) => {
-        this.pendingInitRequests.push(resolve);
-      });
-    }
-
-    this.initializingUser = true;
-    console.log(`🔄 [USER ID FETCH] Fetching user ID from auth`);
-
-    try {
-      const userId = await this.getCurrentUserId();
-
-      // Resolve all pending requests
-      this.pendingInitRequests.forEach((resolve) => resolve(userId));
-      this.pendingInitRequests = [];
-
-      if (userId) {
-        console.log(
-          `✅ [USER ID FETCH COMPLETE] User authenticated successfully`
-        );
-      }
-      return userId;
-    } finally {
-      this.initializingUser = false;
-    }
+  // Force refresh user ID (useful after login/logout)
+  invalidateUserIdCache(): void {
+    this.currentUserIdCache = null;
+    this.userIdLastFetch = 0;
+    console.log("🔄 [USER ID CACHE] Invalidated user ID cache");
   }
 
   async getProperties(): Promise<Property[]> {
@@ -371,19 +380,24 @@ class DataCache {
         // Use cached data when available
         if (!needsProperties) {
           properties = propertiesEntry!.data;
+          console.log(`🟢 [DASHBOARD] Using cached properties`);
         }
         if (!needsEmailLogs) {
           emailLogs = emailLogsEntry!.data;
+          console.log(`🟢 [DASHBOARD] Using cached emailLogs`);
         }
         if (!needsCampaignProgress) {
           campaignProgress = campaignProgressEntry!.data;
+          console.log(`🟢 [DASHBOARD] Using cached campaignProgress`);
         }
         if (!needsEmailTemplates) {
           emailTemplates = emailTemplatesEntry!.data;
+          console.log(`🟢 [DASHBOARD] Using cached emailTemplates`);
         }
 
         // Fetch missing data only (optimized queries for stats)
         if (needsProperties) {
+          console.log(`🔄 [DASHBOARD] Fetching properties data`);
           const { data: propertiesData, error: propertiesError } =
             await this.supabase
               .from("properties")
@@ -396,6 +410,7 @@ class DataCache {
         }
 
         if (needsEmailLogs) {
+          console.log(`🔄 [DASHBOARD] Fetching emailLogs data`);
           const { data: emailLogsData, error: emailLogsError } =
             await this.supabase
               .from("email_logs")
@@ -407,6 +422,7 @@ class DataCache {
         }
 
         if (needsCampaignProgress) {
+          console.log(`🔄 [DASHBOARD] Fetching campaignProgress data`);
           const { data: campaignProgressData, error: campaignProgressError } =
             await this.supabase
               .from("campaign_progress")
@@ -423,6 +439,7 @@ class DataCache {
         }
 
         if (needsEmailTemplates) {
+          console.log(`🔄 [DASHBOARD] Fetching emailTemplates data`);
           const { data: emailTemplatesData, error: emailTemplatesError } =
             await this.supabase.from("email_templates").select("id, is_active");
 
@@ -441,6 +458,10 @@ class DataCache {
         const activeTemplates = emailTemplates.filter(
           (t) => t.is_active
         ).length;
+
+        console.log(
+          `📊 [DASHBOARD STATS] Calculated: ${totalProperties} properties, ${totalEmailsSent} emails, ${totalReplies} replies`
+        );
 
         return {
           totalProperties,
@@ -480,8 +501,6 @@ class DataCache {
     }
 
     const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
-
-    console.log(`🔄 [DATABASE FETCH] Fetching PDF proposals from storage`);
 
     const { data: files, error } = await this.storageClient.storage
       .from(bucketName)
@@ -546,8 +565,20 @@ class DataCache {
     // Use default PDF URL from schema if pdfUrl is empty/null
     const finalPdfUrl = pdfUrl && pdfUrl.trim();
 
-    // First, get or create campaign progress record
-    let campaignProgress = await this.getCampaignProgress();
+    // Check if we have cached campaign progress first, otherwise fetch
+    let campaignProgress = null;
+    const cachedEntry = this.cache.campaignProgress;
+    if (
+      cachedEntry &&
+      this.isValidCache(cachedEntry) &&
+      cachedEntry.userId === userId
+    ) {
+      campaignProgress = cachedEntry.data;
+      console.log(`🟢 [UPDATE PDF] Using cached campaignProgress`);
+    } else {
+      console.log(`🔄 [UPDATE PDF] Fetching fresh campaignProgress`);
+      campaignProgress = await this.getCampaignProgress();
+    }
 
     if (campaignProgress) {
       // Update existing record
@@ -571,19 +602,72 @@ class DataCache {
       this.cache.campaignProgress = {
         data: updatedProgress,
         timestamp: Date.now(),
-        userId: userId,
+        userId,
       };
-      // Invalidate dashboard stats to trigger recalculation
-      this.invalidateDashboardStats();
+      // Note: Don't invalidate dashboard stats here - PDF URL change doesn't affect stats
+      // this.invalidateDashboardStats(); // Removed to prevent unnecessary cache invalidation
+
+      // Clear PDF URL throttle cache since the URL has changed
+      this.pdfUrlCache = null;
+      this.pdfUrlLastFetch = 0;
+
+      // Notify React hooks about the change
+      this.notifyCacheChange();
     }
   }
 
   // Get currently selected PDF URL
   async getSelectedPdfUrl(): Promise<string | null> {
-    const campaignProgress = await this.getCampaignProgress();
+    const userId = await this.ensureUserContext();
+    if (!userId) {
+      return null;
+    }
+
+    // Throttle rapid successive calls
+    const now = Date.now();
+    if (
+      this.pdfUrlCache !== null &&
+      now - this.pdfUrlLastFetch < this.PDF_URL_FETCH_THROTTLE
+    ) {
+      console.log(`🚀 [GET PDF URL] Using throttled cache`);
+      return this.pdfUrlCache;
+    }
+
+    // Check if we have cached campaign progress first, otherwise fetch
+    let campaignProgress = null;
+    const cachedEntry = this.cache.campaignProgress;
+    if (
+      cachedEntry &&
+      this.isValidCache(cachedEntry) &&
+      cachedEntry.userId === userId
+    ) {
+      campaignProgress = cachedEntry.data;
+      console.log(`🟢 [GET PDF URL] Using cached campaignProgress`);
+    } else {
+      console.log(`🔄 [GET PDF URL] Fetching fresh campaignProgress`);
+      campaignProgress = await this.getCampaignProgress();
+    }
+
     const pdfUrl = campaignProgress?.pdf_url || null;
     // Return null for empty string or default URLs
-    return pdfUrl && pdfUrl.trim() ? pdfUrl : null;
+    const finalUrl = pdfUrl && pdfUrl.trim() ? pdfUrl : null;
+
+    // Update throttle cache
+    this.pdfUrlCache = finalUrl;
+    this.pdfUrlLastFetch = now;
+
+    return finalUrl;
+  }
+
+  // Get currently selected PDF URL from cache only (no database fetch)
+  getCachedSelectedPdfUrl(): string | null {
+    const cachedEntry = this.cache.campaignProgress;
+    if (cachedEntry && this.isValidCache(cachedEntry)) {
+      const pdfUrl = cachedEntry.data?.pdf_url || null;
+      // Return null for empty string or default URLs
+      return pdfUrl && pdfUrl.trim() ? pdfUrl : null;
+    }
+    return null;
   }
 
   // Helper function to sanitize filename for Supabase Storage
@@ -735,6 +819,100 @@ class DataCache {
     return publicUrl;
   }
 
+  // Auth initialization for hooks
+  async initializeAuth(): Promise<void> {
+    if (this.isAuthInitialized) {
+      return;
+    }
+
+    if (this.authInitPromise) {
+      return this.authInitPromise;
+    }
+
+    this.authInitPromise = this.doAuthInitialization();
+    return this.authInitPromise;
+  }
+
+  private async doAuthInitialization(): Promise<void> {
+    try {
+      // Get current user ID and details
+      const userId = await this.getCurrentUserId();
+
+      if (userId) {
+        // Get full user details
+        const {
+          data: { user },
+          error,
+        } = await this.supabase.auth.getUser();
+        if (!error && user) {
+          this.currentUser = user;
+
+          // Check root user status
+          await this.updateRootUserStatus();
+        }
+      }
+
+      this.isAuthInitialized = true;
+    } catch (error) {
+      console.error("❌ [CACHE AUTH] Auth initialization error:", error);
+      this.isAuthInitialized = true; // Mark as initialized even on error
+    }
+  }
+
+  private async updateRootUserStatus(): Promise<void> {
+    const now = Date.now();
+
+    // Check if root user status is still valid
+    if (
+      now - this.rootUserCacheTimestamp < this.ROOT_USER_CACHE_DURATION &&
+      this.isRootUser !== undefined
+    ) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/check-root-user");
+      const data = await response.json();
+      this.isRootUser = data.isRootUser;
+      this.rootUserCacheTimestamp = now;
+    } catch (error) {
+      console.error("Failed to check root user status:", error);
+      this.isRootUser = false;
+    }
+  }
+
+  // Check if auth is initialized
+  getAuthInitialized(): boolean {
+    return this.isAuthInitialized;
+  }
+
+  // Get current user state (returns true if user exists)
+  async hasUser(): Promise<boolean> {
+    const userId = await this.getCurrentUserId();
+    return userId !== null;
+  }
+
+  // Get current user object
+  getCurrentUser(): any {
+    return this.currentUser;
+  }
+  // Get root user status
+  async getIsRootUser(): Promise<boolean> {
+    // First ensure we have a current user
+    const userId = await this.getCurrentUserId();
+    if (!userId) {
+      return false;
+    }
+
+    const now = Date.now();
+    if (now - this.rootUserCacheTimestamp < this.ROOT_USER_CACHE_DURATION) {
+      return this.isRootUser;
+    }
+
+    await this.updateRootUserStatus();
+    return this.isRootUser;
+  }
+
   // Update cache directly instead of invalidating (more efficient)
   updateEmailTemplateInCache(updatedTemplate: EmailTemplate): void {
     try {
@@ -820,7 +998,6 @@ class DataCache {
 
   // Clear all cache (e.g., on logout)
   clearAll(): void {
-    console.log(`🧹 [CACHE CLEAR] All cache cleared`);
     this.cache = {
       properties: null,
       emailTemplates: null,
@@ -829,15 +1006,18 @@ class DataCache {
       dashboardStats: null,
       pdfProposals: null,
     };
-    this.currentUserId = null;
-    this.userIdCacheTimestamp = 0;
-    this.initializingUser = false;
-    this.fetchingProperties = false;
-    this.fetchingEmailTemplates = false;
-    this.fetchingEmailLogs = false;
-    this.fetchingCampaignProgress = false;
-    this.fetchingDashboardStats = false;
-    this.fetchingPdfProposals = false;
+    // Reset auth state - clear user ID throttle cache
+    this.isAuthInitialized = false;
+    this.authInitPromise = null;
+    this.currentUser = null;
+    this.currentUserIdCache = null;
+    this.userIdLastFetch = 0;
+    this.isRootUser = false;
+    this.rootUserCacheTimestamp = 0;
+    // Reset PDF URL throttle cache
+    this.pdfUrlCache = null;
+    this.pdfUrlLastFetch = 0;
+    this.notifyCacheChange();
   }
 
   // Force refresh data (publicly accessible)
@@ -867,9 +1047,6 @@ class DataCache {
   }
 
   async refreshPdfProposals(): Promise<PDFProposal[]> {
-    console.log(`🔄 [DATABASE FETCH] Refreshing PDF proposals from storage`);
-    // Clear fetching flag to ensure fresh fetch
-    this.fetchingPdfProposals = false;
     // Invalidate cache completely
     this.invalidatePdfProposals();
     // Force fresh fetch from storage and update cache
@@ -918,24 +1095,19 @@ class DataCache {
         dashboardStats: null,
         pdfProposals: null,
       };
-      this.currentUserId = null;
-      this.userIdCacheTimestamp = 0;
-      this.initializingUser = false;
-      this.fetchingProperties = false;
-      this.fetchingEmailTemplates = false;
-      this.fetchingEmailLogs = false;
-      this.fetchingCampaignProgress = false;
-      this.fetchingDashboardStats = false;
-      this.fetchingPdfProposals = false;
+      // Reset auth state safely - clear user ID throttle cache
+      this.isAuthInitialized = false;
+      this.authInitPromise = null;
+      this.currentUser = null;
+      this.currentUserIdCache = null;
+      this.userIdLastFetch = 0;
+      this.isRootUser = false;
+      this.rootUserCacheTimestamp = 0;
     }
   }
 
   // PDF Cache management methods for better performance
   addPdfProposalToCache(fileName: string, fileSize: number): void {
-    console.log(
-      `➕ [PDF CACHE ADD] Adding PDF to cache: ${fileName}, size: ${fileSize} bytes`
-    );
-
     try {
       const entry = this.cache.pdfProposals;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
@@ -980,8 +1152,6 @@ class DataCache {
   }
 
   removePdfProposalFromCache(fileName: string): void {
-    console.log(`🗑️ [CACHE REMOVE] Removing PDF from cache: ${fileName}`);
-
     try {
       const entry = this.cache.pdfProposals;
       if (entry && !this.isExpired(entry) && this.isSameUser(entry)) {
@@ -1002,6 +1172,32 @@ class DataCache {
       console.error("Error removing PDF proposal from cache:", error);
     }
   }
+
+  // Debug method to check cache status
+  debugCacheStatus(): void {
+    const now = Date.now();
+    console.log("🔍 [CACHE DEBUG] Current cache status:");
+
+    Object.entries(this.cache).forEach(([key, entry]) => {
+      if (entry) {
+        const age = now - entry.timestamp;
+        const ageMinutes = Math.round(age / 60000);
+        const expired = age > this.CACHE_DURATION;
+        console.log(
+          `  ${key}: ${
+            expired ? "⏰ EXPIRED" : "🟢 VALID"
+          } (${ageMinutes}min old)`
+        );
+      } else {
+        console.log(`  ${key}: ❌ NULL`);
+      }
+    });
+  }
 }
 
 export const dataCache = new DataCache();
+
+// Expose debug methods globally for development
+if (typeof window !== "undefined") {
+  (window as any).debugCache = () => dataCache.debugCacheStatus();
+}

@@ -471,7 +471,7 @@ export default function DashboardPage() {
     applyPagination();
   }, [filteredProperties, filteredEmailLogs, currentPage, currentView]);
 
-  // Load selected PDF URL
+  // Load selected PDF URL - only once on mount, then listen for changes
   useEffect(() => {
     const loadSelectedPdf = async () => {
       try {
@@ -484,7 +484,20 @@ export default function DashboardPage() {
     };
 
     loadSelectedPdf();
-  }, [campaignProgress]); // Reload when campaign progress changes
+  }, []); // Empty dependency array - only load once on mount
+
+  // Listen for campaign progress changes to update PDF URL efficiently
+  useEffect(() => {
+    if (campaignProgress) {
+      const newPdfUrl =
+        campaignProgress.pdf_url && campaignProgress.pdf_url.trim()
+          ? campaignProgress.pdf_url
+          : null;
+
+      // Update the PDF URL state
+      setSelectedPdfUrl(newPdfUrl);
+    }
+  }, [campaignProgress?.pdf_url]); // Only depend on the pdf_url property
 
   // Helper function to extract clean PDF name from URL
   const getPdfDisplayName = (url: string): string => {

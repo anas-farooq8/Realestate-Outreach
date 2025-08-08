@@ -15,7 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { dataCache } from "@/lib/cache";
-import { useAuth } from "@/contexts/auth-context";
+import { useCachedAuth } from "@/hooks/use-cached-data";
 import {
   Home,
   Upload,
@@ -40,7 +40,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ children }: NavbarProps) {
-  const { user, isRootUser, isLoading, isAuthInitialized } = useAuth();
+  const { user, isRootUser, isLoading, isAuthInitialized } = useCachedAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -100,7 +100,8 @@ export function Navbar({ children }: NavbarProps) {
   const handleSignOut = async () => {
     try {
       setIsSigningOut(true);
-      // Clear cache before signing out to prevent errors
+      // Clear cache and invalidate user ID cache before signing out to prevent errors
+      dataCache.invalidateUserIdCache();
       dataCache.clearAllSafe();
       await supabase.auth.signOut();
 

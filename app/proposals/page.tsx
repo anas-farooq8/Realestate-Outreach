@@ -34,6 +34,8 @@ import {
   ArrowUp,
   ArrowDown,
   Filter,
+  MoreVertical,
+  Eye,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -55,6 +57,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useCachedPdfProposals } from "@/hooks/use-cached-data";
 import type { PDFProposal } from "@/lib/types";
 
@@ -88,8 +96,20 @@ export default function ProposalsPage() {
   const [selectingPdf, setSelectingPdf] = useState(false);
   const [sortBy, setSortBy] = useState<"date" | "size">("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [isMobile, setIsMobile] = useState(false);
 
   const { toast } = useToast();
+
+  // Check if mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Sync local PDF proposals with cached data when it changes
   useEffect(() => {
@@ -382,146 +402,301 @@ export default function ProposalsPage() {
     applyPagination();
   }, [filteredPdfProposals, currentPage]);
 
+  // Mobile PDF Card Component
+  const PdfCard = ({ pdf }: { pdf: PDFProposal }) => {
+    const isSelected = selectedPdfUrl === pdf.publicUrl;
+
+    return (
+      <Card
+        className={`mb-4 cursor-pointer hover:shadow-md transition-shadow ${
+          isSelected ? "ring-2 ring-blue-500 bg-blue-50 border-blue-200" : ""
+        }`}
+        onClick={() => handleRowClick(pdf)}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start space-x-3 flex-1 min-w-0">
+              <FileText className="h-5 w-5 text-red-500 mt-1 flex-shrink-0" />
+              <div className="min-w-0 flex-1">
+                <h3 className="font-medium text-gray-900 truncate text-sm">
+                  {pdf.name}
+                </h3>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className="text-xs text-gray-500">
+                    {(pdf.size / 1024).toFixed(1)} KB
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {new Date(pdf.created_at).toLocaleDateString()}
+                  </span>
+                  {isSelected && (
+                    <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                      SELECTED
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-8 w-8 p-0 flex-shrink-0"
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRowClick(pdf);
+                  }}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleShowMetadata(pdf);
+                  }}
+                >
+                  <Info className="h-4 w-4 mr-2" />
+                  Show Details
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isSelected) {
+                      handleDeselectPdf();
+                    } else {
+                      handleSelectPdf(pdf);
+                    }
+                  }}
+                  disabled={selectingPdf}
+                >
+                  {selectingPdf ? (
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  ) : isSelected ? (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Circle className="h-4 w-4 mr-2" />
+                  )}
+                  {isSelected ? "Selected" : "Select for Campaigns"}
+                </DropdownMenuItem>
+                {!isSelected && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem
+                        onSelect={(e) => {
+                          e.preventDefault();
+                        }}
+                        className="text-red-600"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="sm:max-w-md mx-auto">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete PDF</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete "{pdf.name}"? This
+                          action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeletePdf(pdf.name);
+                          }}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Button
+              variant={isSelected ? "default" : "outline"}
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isSelected) {
+                  handleDeselectPdf();
+                } else {
+                  handleSelectPdf(pdf);
+                }
+              }}
+              disabled={selectingPdf}
+              className={`${
+                isSelected
+                  ? "bg-green-600 hover:bg-green-700 text-white"
+                  : "hover:bg-blue-50"
+              }`}
+            >
+              {selectingPdf ? (
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              ) : isSelected ? (
+                <CheckCircle className="h-4 w-4 mr-2" />
+              ) : (
+                <Circle className="h-4 w-4 mr-2" />
+              )}
+              {isSelected ? "Selected" : "Select"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
-    <div className="p-6">
-      <div className="space-y-8">
+    <div className="p-3 md:p-6">
+      <div className="space-y-6 md:space-y-8">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">PDF Proposals</h1>
-            <p className="mt-2 text-gray-600">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
+              PDF Proposals
+            </h1>
+            <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-600">
               Manage and view your PDF proposals and service documents
             </p>
           </div>
-          <div className="flex space-x-4">
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              disabled={pdfProposalsLoading}
-            >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${
-                  pdfProposalsLoading ? "animate-spin" : ""
-                }`}
-              />
-              Refresh
-            </Button>
-          </div>
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={pdfProposalsLoading}
+            className="hidden sm:flex sm:w-auto"
+          >
+            <RefreshCw
+              className={`mr-2 h-4 w-4 ${
+                pdfProposalsLoading ? "animate-spin" : ""
+              }`}
+            />
+            Refresh
+          </Button>
         </div>
 
         {/* Upload and Search Section */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <FileText className="mr-2 h-5 w-5" />
-                Proposal Management
-              </div>
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center text-lg md:text-xl">
+              <FileText className="mr-2 h-5 w-5" />
+              Proposal Management
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Upload, view, and manage your PDF proposal documents. Select one
-              PDF to use for email campaigns. No PDF is selected by default.
+              PDF to use for email campaigns.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {/* Upload Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 border border-dashed border-gray-300 rounded-lg gap-4">
+              <div className="flex items-center space-x-2">
+                <Upload className="h-5 w-5 text-gray-400" />
+                <span className="text-sm text-gray-600">
+                  Upload new PDF proposal
+                </span>
+              </div>
+              <div className="w-full sm:w-auto">
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  disabled={uploadingPdf}
+                  className="hidden"
+                  id="pdf-upload"
+                />
+                <label
+                  htmlFor="pdf-upload"
+                  className={`cursor-pointer inline-flex items-center justify-center w-full sm:w-auto px-4 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                    uploadingPdf ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                >
+                  {uploadingPdf ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload PDF
+                    </>
+                  )}
+                </label>
+              </div>
+            </div>
+
+            {/* Search and Sort */}
             <div className="space-y-4">
-              {/* Upload Section */}
-              <div className="flex items-center justify-between p-4 border border-dashed border-gray-300 rounded-lg">
-                <div className="flex items-center space-x-2">
-                  <Upload className="h-5 w-5 text-gray-400" />
-                  <span className="text-sm text-gray-600">
-                    Upload new PDF proposal
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    onChange={handleFileUpload}
-                    disabled={uploadingPdf}
-                    className="hidden"
-                    id="pdf-upload"
-                  />
-                  <label
-                    htmlFor="pdf-upload"
-                    className={`cursor-pointer inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
-                      uploadingPdf ? "opacity-50 cursor-not-allowed" : ""
-                    }`}
-                  >
-                    {uploadingPdf ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="mr-2 h-4 w-4" />
-                        Upload a PDF
-                      </>
-                    )}
-                  </label>
-                </div>
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search PDF files by name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
 
-              {/* Search and Sort */}
-              <div className="space-y-4">
-                {/* Search Bar */}
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                  <Input
-                    placeholder="Search PDF files by Name..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
-                  />
+              {/* Sort Controls */}
+              <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <div className="flex items-center space-x-2">
+                    <Filter className="h-4 w-4 text-gray-500" />
+                    <Label className="text-sm font-medium text-gray-500">
+                      Sort by:
+                    </Label>
+                  </div>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant={sortBy === "date" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSort("date")}
+                      className="flex items-center space-x-1 flex-1 sm:flex-initial"
+                    >
+                      <span>Date</span>
+                      {sortBy === "date" &&
+                        (sortDirection === "asc" ? (
+                          <ArrowUp className="h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="h-3 w-3" />
+                        ))}
+                    </Button>
+                    <Button
+                      variant={sortBy === "size" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSort("size")}
+                      className="flex items-center space-x-1 flex-1 sm:flex-initial"
+                    >
+                      <span>Size</span>
+                      {sortBy === "size" &&
+                        (sortDirection === "asc" ? (
+                          <ArrowUp className="h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="h-3 w-3" />
+                        ))}
+                    </Button>
+                  </div>
                 </div>
 
-                {/* Sort Controls */}
-                <div className="flex flex-col sm:flex-row gap-4 sm:items-center justify-between">
-                  <div className="flex flex-wrap gap-4 items-center">
-                    <div className="flex items-center space-x-2">
-                      <Filter className="h-4 w-4 text-gray-500" />
-                      <Label className="text-sm font-medium text-gray-500">
-                        Sort by:
-                      </Label>
-                      <div className="flex space-x-2">
-                        <Button
-                          variant={sortBy === "date" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handleSort("date")}
-                          className="flex items-center space-x-1"
-                        >
-                          <span>Date</span>
-                          {sortBy === "date" &&
-                            (sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3" />
-                            ))}
-                        </Button>
-                        <Button
-                          variant={sortBy === "size" ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handleSort("size")}
-                          className="flex items-center space-x-1"
-                        >
-                          <span>Size</span>
-                          {sortBy === "size" &&
-                            (sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3" />
-                            ))}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Results count */}
-                  <div className="text-sm text-gray-500">
-                    {filteredPdfProposals.length} PDF
-                    {filteredPdfProposals.length !== 1 ? "s" : ""} found
-                  </div>
+                {/* Results count */}
+                <div className="text-sm text-gray-500 text-center sm:text-right">
+                  {filteredPdfProposals.length} PDF
+                  {filteredPdfProposals.length !== 1 ? "s" : ""} found
                 </div>
               </div>
             </div>
@@ -530,9 +705,11 @@ export default function ProposalsPage() {
 
         {/* PDF List */}
         <Card>
-          <CardHeader>
-            <CardTitle>PDF Files ({filteredPdfProposals.length})</CardTitle>
-            <CardDescription>
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg md:text-xl">
+              PDF Files ({filteredPdfProposals.length})
+            </CardTitle>
+            <CardDescription className="text-sm">
               {filteredPdfProposals.length !== pdfProposals.length &&
                 `Showing ${filteredPdfProposals.length} of ${pdfProposals.length} files`}
               {paginatedItems.length > 0 &&
@@ -566,163 +743,173 @@ export default function ProposalsPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Status</TableHead>
-                        <TableHead>File Name</TableHead>
-                        <TableHead>Size</TableHead>
-                        <TableHead>Uploaded</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedItems.map((pdf) => {
-                        const isSelected = selectedPdfUrl === pdf.publicUrl;
+                {/* Mobile View - Cards */}
+                {isMobile ? (
+                  <div className="md:hidden">
+                    {paginatedItems.map((pdf) => (
+                      <PdfCard key={pdf.name} pdf={pdf} />
+                    ))}
+                  </div>
+                ) : (
+                  /* Desktop View - Table */
+                  <div className="hidden md:block rounded-md border overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Status</TableHead>
+                          <TableHead>File Name</TableHead>
+                          <TableHead>Size</TableHead>
+                          <TableHead>Uploaded</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedItems.map((pdf) => {
+                          const isSelected = selectedPdfUrl === pdf.publicUrl;
 
-                        return (
-                          <TableRow
-                            key={pdf.name}
-                            className={`cursor-pointer hover:bg-gray-50 ${
-                              isSelected
-                                ? "bg-blue-50 border-l-4 border-l-blue-500"
-                                : ""
-                            }`}
-                            onClick={() => handleRowClick(pdf)}
-                          >
-                            <TableCell>
-                              <div className="flex items-center justify-center">
-                                <Button
-                                  variant={isSelected ? "default" : "outline"}
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isSelected) {
-                                      handleDeselectPdf();
-                                    } else {
-                                      handleSelectPdf(pdf);
-                                    }
-                                  }}
-                                  disabled={selectingPdf}
-                                  className={`${
-                                    isSelected
-                                      ? "bg-green-600 hover:bg-green-700 text-white"
-                                      : "hover:bg-blue-50"
-                                  }`}
-                                  title={
-                                    isSelected
-                                      ? "Cannot deselect - choose a different PDF to switch"
-                                      : "Select this PDF for campaigns"
-                                  }
-                                >
-                                  {selectingPdf ? (
-                                    <RefreshCw className="h-4 w-4 animate-spin" />
-                                  ) : isSelected ? (
-                                    <CheckCircle className="h-4 w-4" />
-                                  ) : (
-                                    <Circle className="h-4 w-4" />
-                                  )}
-                                </Button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              <div className="flex items-center space-x-2">
-                                <FileText className="h-4 w-4 text-red-500" />
-                                <span className="truncate max-w-xs">
-                                  {pdf.name}
-                                </span>
-                                {isSelected && (
-                                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
-                                    SELECTED
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              {(pdf.size / 1024).toFixed(1)} KB
-                            </TableCell>
-                            <TableCell>
-                              {new Date(pdf.created_at).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center space-x-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleShowMetadata(pdf);
-                                  }}
-                                  title="Show Metadata"
-                                >
-                                  <Info className="h-4 w-4" />
-                                </Button>
-                                <AlertDialog>
-                                  <AlertDialogTrigger asChild>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                      }}
-                                      disabled={isSelected}
-                                      className={`${
-                                        isSelected
-                                          ? "text-gray-400 cursor-not-allowed opacity-50"
-                                          : "text-red-600 hover:text-red-700"
-                                      }`}
-                                      title={
-                                        isSelected
-                                          ? "Cannot delete the selected PDF. Please select a different PDF first."
-                                          : "Delete PDF"
+                          return (
+                            <TableRow
+                              key={pdf.name}
+                              className={`cursor-pointer hover:bg-gray-50 ${
+                                isSelected
+                                  ? "bg-blue-50 border-l-4 border-l-blue-500"
+                                  : ""
+                              }`}
+                              onClick={() => handleRowClick(pdf)}
+                            >
+                              <TableCell>
+                                <div className="flex items-center justify-center">
+                                  <Button
+                                    variant={isSelected ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (isSelected) {
+                                        handleDeselectPdf();
+                                      } else {
+                                        handleSelectPdf(pdf);
                                       }
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </AlertDialogTrigger>
-                                  {!isSelected && (
-                                    <AlertDialogContent>
-                                      <AlertDialogHeader>
-                                        <AlertDialogTitle>
-                                          Delete PDF
-                                        </AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                          Are you sure you want to delete "
-                                          {pdf.name}"? This action cannot be
-                                          undone.
-                                        </AlertDialogDescription>
-                                      </AlertDialogHeader>
-                                      <AlertDialogFooter>
-                                        <AlertDialogCancel>
-                                          Cancel
-                                        </AlertDialogCancel>
-                                        <AlertDialogAction
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDeletePdf(pdf.name);
-                                          }}
-                                          className="bg-red-600 hover:bg-red-700"
-                                        >
-                                          Delete
-                                        </AlertDialogAction>
-                                      </AlertDialogFooter>
-                                    </AlertDialogContent>
+                                    }}
+                                    disabled={selectingPdf}
+                                    className={`${
+                                      isSelected
+                                        ? "bg-green-600 hover:bg-green-700 text-white"
+                                        : "hover:bg-blue-50"
+                                    }`}
+                                    title={
+                                      isSelected
+                                        ? "Cannot deselect - choose a different PDF to switch"
+                                        : "Select this PDF for campaigns"
+                                    }
+                                  >
+                                    {selectingPdf ? (
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : isSelected ? (
+                                      <CheckCircle className="h-4 w-4" />
+                                    ) : (
+                                      <Circle className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                              </TableCell>
+                              <TableCell className="font-medium">
+                                <div className="flex items-center space-x-2">
+                                  <FileText className="h-4 w-4 text-red-500" />
+                                  <span className="truncate max-w-xs">
+                                    {pdf.name}
+                                  </span>
+                                  {isSelected && (
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded-full">
+                                      SELECTED
+                                    </span>
                                   )}
-                                </AlertDialog>
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                {(pdf.size / 1024).toFixed(1)} KB
+                              </TableCell>
+                              <TableCell>
+                                {new Date(pdf.created_at).toLocaleDateString()}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleShowMetadata(pdf);
+                                    }}
+                                    title="Show Metadata"
+                                  >
+                                    <Info className="h-4 w-4" />
+                                  </Button>
+                                  <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                        }}
+                                        disabled={isSelected}
+                                        className={`${
+                                          isSelected
+                                            ? "text-gray-400 cursor-not-allowed opacity-50"
+                                            : "text-red-600 hover:text-red-700"
+                                        }`}
+                                        title={
+                                          isSelected
+                                            ? "Cannot delete the selected PDF. Please select a different PDF first."
+                                            : "Delete PDF"
+                                        }
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </AlertDialogTrigger>
+                                    {!isSelected && (
+                                      <AlertDialogContent className="sm:max-w-md mx-auto">
+                                        <AlertDialogHeader>
+                                          <AlertDialogTitle>
+                                            Delete PDF
+                                          </AlertDialogTitle>
+                                          <AlertDialogDescription>
+                                            Are you sure you want to delete "
+                                            {pdf.name}"? This action cannot be
+                                            undone.
+                                          </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                          <AlertDialogCancel>
+                                            Cancel
+                                          </AlertDialogCancel>
+                                          <AlertDialogAction
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleDeletePdf(pdf.name);
+                                            }}
+                                            className="bg-red-600 hover:bg-red-700"
+                                          >
+                                            Delete
+                                          </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                    )}
+                                  </AlertDialog>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-500">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mt-6 gap-4">
+                    <div className="text-sm text-gray-500 text-center sm:text-left">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
                       {Math.min(
                         currentPage * ITEMS_PER_PAGE,
@@ -730,30 +917,41 @@ export default function ProposalsPage() {
                       )}{" "}
                       of {filteredPdfProposals.length} results
                     </div>
-                    <div className="flex items-center space-x-2">
+
+                    <div className="flex items-center justify-center space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setCurrentPage(currentPage - 1)}
                         disabled={currentPage === 1}
+                        className="flex items-center"
                       >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        <span className="hidden sm:inline">Previous</span>
+                        <span className="sm:hidden">Prev</span>
                       </Button>
 
                       <div className="flex items-center space-x-1">
                         {Array.from(
-                          { length: Math.min(5, totalPages) },
+                          { length: Math.min(isMobile ? 3 : 5, totalPages) },
                           (_, i) => {
                             let pageNum;
-                            if (totalPages <= 5) {
+                            const maxPages = isMobile ? 3 : 5;
+                            if (totalPages <= maxPages) {
                               pageNum = i + 1;
-                            } else if (currentPage <= 3) {
+                            } else if (
+                              currentPage <=
+                              Math.floor(maxPages / 2) + 1
+                            ) {
                               pageNum = i + 1;
-                            } else if (currentPage >= totalPages - 2) {
-                              pageNum = totalPages - 4 + i;
+                            } else if (
+                              currentPage >=
+                              totalPages - Math.floor(maxPages / 2)
+                            ) {
+                              pageNum = totalPages - maxPages + 1 + i;
                             } else {
-                              pageNum = currentPage - 2 + i;
+                              pageNum =
+                                currentPage - Math.floor(maxPages / 2) + i;
                             }
 
                             return (
@@ -766,7 +964,7 @@ export default function ProposalsPage() {
                                 }
                                 size="sm"
                                 onClick={() => setCurrentPage(pageNum)}
-                                className="w-8 h-8 p-0"
+                                className="w-8 h-8 p-0 text-xs md:text-sm"
                               >
                                 {pageNum}
                               </Button>
@@ -780,9 +978,11 @@ export default function ProposalsPage() {
                         size="sm"
                         onClick={() => setCurrentPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
+                        className="flex items-center"
                       >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
+                        <span className="hidden sm:inline">Next</span>
+                        <span className="sm:hidden">Next</span>
+                        <ChevronRight className="h-4 w-4 ml-1" />
                       </Button>
                     </div>
                   </div>
@@ -798,7 +998,7 @@ export default function ProposalsPage() {
         open={isMetadataDialogOpen}
         onOpenChange={setIsMetadataDialogOpen}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="mx-4 sm:mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6">
           <DialogHeader>
             <DialogTitle>PDF Metadata</DialogTitle>
             <DialogDescription>
@@ -862,7 +1062,10 @@ export default function ProposalsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setIsMetadataDialogOpen(false)}>
+            <Button
+              onClick={() => setIsMetadataDialogOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Close
             </Button>
           </DialogFooter>
