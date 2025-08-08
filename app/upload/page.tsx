@@ -22,7 +22,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { ImageIcon, Trash2, Edit2, Check, X, Plus } from "lucide-react";
+import {
+  ImageIcon,
+  Trash2,
+  Edit2,
+  Check,
+  X,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import type { ExtractedProperty } from "@/lib/types";
 
 export default function UploadPage() {
@@ -259,7 +267,7 @@ export default function UploadPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
-      <div className="space-y-6 sm:space-y-8">
+      <div className="space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="text-center sm:text-left">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
@@ -279,65 +287,94 @@ export default function UploadPage() {
               <span>Step 1: Upload Image</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Upload Section */}
-              <div className="flex flex-col sm:flex-row gap-4 sm:items-end">
-                {/* File Input */}
-                <div className="flex-1 sm:flex-[3]">
-                  <Label
-                    htmlFor="image-upload"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    Choose Image File
-                  </Label>
-                  <p className="text-xs text-gray-500 mb-2">
-                    PNG, JPG up to 10MB
-                  </p>
-                  <Input
-                    id="image-upload"
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="w-full cursor-pointer h-10 file:mr-4 file:py-2 file:px-4 file:rounded-none file:border-0 file:shadow-none file:bg-transparent file:text-gray-700 file:font-medium file:cursor-pointer"
-                  />
+          <CardContent className="pt-3 space-y-6">
+            {/* Compact Upload Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 border border-dashed border-blue-300 rounded-lg bg-blue-50/30">
+              <div className="flex items-center space-x-3 flex-1">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <ImageIcon className="h-4 w-4 text-blue-600" />
                 </div>
-                <div className="sm:flex-1">
-                  <Button
-                    onClick={handleExtractNames}
-                    disabled={!selectedFile || isExtracting}
-                    variant="outline"
-                    className="w-full h-10 min-w-[120px] !p-0 flex items-center justify-center"
-                  >
-                    {isExtracting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2" />
-                        Extracting...
-                      </>
-                    ) : (
-                      <>
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        Extract Names
-                      </>
-                    )}
-                  </Button>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900">
+                    Upload Image
+                  </p>
+                  <p className="text-xs text-gray-600 truncate">
+                    Select image (Up to 10MB)
+                  </p>
                 </div>
               </div>
-
-              {/* Image Preview */}
-              {imagePreview && (
-                <div className="space-y-2">
-                  <Label>Image Preview</Label>
-                  <div className="border rounded-lg p-2 sm:p-4 bg-white">
-                    <img
-                      src={imagePreview}
-                      alt="Upload preview"
-                      className="w-full h-auto max-h-64 sm:max-h-96 mx-auto rounded shadow-sm object-contain"
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Upload Button */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  disabled={isExtracting}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <Button
+                  asChild
+                  className={`inline-flex items-center justify-center px-4 h-10 w-full sm:w-auto text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors min-w-[100px] cursor-pointer ${
+                    isExtracting ? "opacity-50 cursor-not-allowed" : ""
+                  }`}
+                  disabled={isExtracting}
+                >
+                  <label htmlFor="image-upload">
+                    <ImageIcon className="mr-1 h-4 w-4" />
+                    <span className="hidden sm:inline">Choose File</span>
+                    <span className="sm:hidden">Upload</span>
+                  </label>
+                </Button>
+                {/* Extract Names Button - immediately after upload button */}
+                <Button
+                  onClick={handleExtractNames}
+                  disabled={!selectedFile || isExtracting}
+                  className={`inline-flex items-center justify-center px-4 h-10 w-full sm:w-auto text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors min-w-[100px] ${
+                    !selectedFile || isExtracting
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                >
+                  {isExtracting ? (
+                    <>
+                      <RefreshCw className="mr-1 h-4 w-4 animate-spin" />
+                      <span className="hidden sm:inline">Extracting...</span>
+                      <span className="sm:hidden">...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon className="mr-1 h-4 w-4" />
+                      <span className="hidden sm:inline">Extract Names</span>
+                      <span className="sm:hidden">Extract</span>
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
+            {/* Image Preview */}
+            {imagePreview && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>Image Preview</Label>
+                  {selectedFile && (
+                    <span
+                      className="max-w-[200px] truncate text-xs text-gray-700 font-medium"
+                      title={selectedFile.name}
+                    >
+                      : {selectedFile.name}
+                    </span>
+                  )}
+                </div>
+                <div className="border rounded-lg p-2 sm:p-4 bg-white">
+                  <img
+                    src={imagePreview}
+                    alt="Upload preview"
+                    className="w-full h-auto max-h-64 sm:max-h-96 mx-auto rounded shadow-sm object-contain"
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
