@@ -187,7 +187,7 @@ export function Navbar({ children }: NavbarProps) {
         {/* Desktop Sidebar */}
         <div
           className={`hidden lg:flex lg:flex-col ${
-            sidebarCollapsed ? "lg:w-20" : "lg:w-72"
+            sidebarCollapsed ? "lg:w-20" : "lg:w-64"
           } transition-all duration-300 ease-in-out`}
         >
           <div className="flex flex-col flex-1 bg-white shadow-lg">
@@ -408,10 +408,10 @@ export function Navbar({ children }: NavbarProps) {
               )}
 
               {/* Company Information - Mobile */}
-              <div className="px-4 pb-6">
+              <div className="px-4 py-2">
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-                  <div className="p-3 space-y-3">
-                    <div className="text-center">
+                  <div className="p-2 space-y-1">
+                    <div className="text-center space-y-0.5">
                       <h4 className="text-sm font-semibold text-gray-800">
                         Total Body Mobile Massage
                       </h4>
@@ -419,28 +419,26 @@ export function Navbar({ children }: NavbarProps) {
                         Outreach Team
                       </p>
                     </div>
-                    <div className="space-y-1">
-                      <a
-                        href="mailto:tbmmoutreach@gmail.com"
-                        className="flex items-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors p-2 hover:bg-blue-50 rounded"
-                      >
-                        <Mail className="h-3 w-3 flex-shrink-0" />
-                        <span className="flex-1 min-w-0 truncate">
-                          tbmmoutreach@gmail.com
-                        </span>
-                      </a>
-                      <a
-                        href="https://www.totalbodymobilemassage.com"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center space-x-2 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors p-2 hover:bg-blue-50 rounded"
-                      >
-                        <Globe className="h-3 w-3 flex-shrink-0" />
-                        <span className="flex-1 min-w-0 truncate">
-                          totalbodymobilemassage.com
-                        </span>
-                      </a>
-                    </div>
+                    <a
+                      href="mailto:tbmmoutreach@gmail.com"
+                      className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors py-1"
+                    >
+                      <Mail className="h-3 w-3 flex-shrink-0" />
+                      <span className="flex-1 min-w-0 truncate">
+                        tbmmoutreach@gmail.com
+                      </span>
+                    </a>
+                    <a
+                      href="https://www.totalbodymobilemassage.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1 text-xs text-blue-600 hover:text-blue-700 hover:underline transition-colors py-1"
+                    >
+                      <Globe className="h-3 w-3 flex-shrink-0" />
+                      <span className="flex-1 min-w-0 truncate">
+                        totalbodymobilemassage.com
+                      </span>
+                    </a>
                   </div>
                 </div>
               </div>
