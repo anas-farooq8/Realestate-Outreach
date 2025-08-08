@@ -28,7 +28,12 @@ import {
   FileText,
   UserPlus,
 } from "lucide-react";
-import { Sheet, SheetContent } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 
 interface NavbarProps {
   children: React.ReactNode;
@@ -284,6 +289,9 @@ export function Navbar({ children }: NavbarProps) {
         {/* Mobile Sidebar */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetContent side="left" className="w-64 p-0">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Navigation Menu</SheetTitle>
+            </SheetHeader>
             <div className="flex flex-col h-full bg-white">
               <div className="flex items-center h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
                 <div className="flex items-center space-x-3">

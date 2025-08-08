@@ -12,7 +12,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
 import { useLoginController } from "@/hooks/use-login-controller";
 
 export default function LoginPage() {
