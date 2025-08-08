@@ -24,6 +24,17 @@ export async function createClient() {
           }
         },
       },
+      // Disable realtime for server-side operations to reduce warnings
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+      global: {
+        headers: {
+          "x-application-name": "realestate-outreach-server",
+        },
+      },
     }
   );
 }

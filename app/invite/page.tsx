@@ -43,12 +43,19 @@ import {
   Users,
   Clock,
   CheckCircle,
+  Filter,
 } from "lucide-react";
 import { useInviteController } from "@/hooks/use-invite-controller";
+
+// Add sorting types
+type SortField = "created_at" | "user_last_sign_in_at";
+type SortOrder = "asc" | "desc";
 
 export default function InviteUserPage() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
+  const [sortField, setSortField] = useState<SortField>("created_at");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   const {
     invites,
@@ -84,6 +91,43 @@ export default function InviteUserPage() {
   async function handleDeleteUser(userId: string, email: string) {
     await deleteUser(userId, email);
   }
+
+  // Sorting function
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortOrder("desc");
+    }
+  };
+
+  // Get sorted invites
+  const sortedInvites = React.useMemo(() => {
+    return [...invites].sort((a, b) => {
+      let aValue: string | null | undefined;
+      let bValue: string | null | undefined;
+
+      if (sortField === "created_at") {
+        aValue = a.created_at;
+        bValue = b.created_at;
+      } else {
+        // user_last_sign_in_at
+        aValue = a.user_last_sign_in_at;
+        bValue = b.user_last_sign_in_at;
+      }
+
+      // Handle null/undefined values - put them at the end
+      if (!aValue && !bValue) return 0;
+      if (!aValue) return 1;
+      if (!bValue) return -1;
+
+      const aTime = new Date(aValue).getTime();
+      const bTime = new Date(bValue).getTime();
+
+      return sortOrder === "asc" ? aTime - bTime : bTime - aTime;
+    });
+  }, [invites, sortField, sortOrder]);
 
   function getStatusBadge(invite: any) {
     // Simply show if the user has an account
@@ -178,30 +222,16 @@ export default function InviteUserPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 max-w-md">
           <Card>
             <CardContent className="p-6">
               <div className="flex items-center">
                 <Users className="h-8 w-8 text-blue-600" />
                 <div className="ml-4">
                   <p className="text-2xl font-bold text-gray-900">
-                    {stats.total}
-                  </p>
-                  <p className="text-sm text-gray-600">Total Invites</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <UserPlus className="h-8 w-8 text-green-600" />
-                <div className="ml-4">
-                  <p className="text-2xl font-bold text-gray-900">
                     {stats.usersWithAccounts}
                   </p>
-                  <p className="text-sm text-gray-600">Users with Accounts</p>
+                  <p className="text-sm text-gray-600">Total Users</p>
                 </div>
               </div>
             </CardContent>
@@ -288,26 +318,13 @@ export default function InviteUserPage() {
           {/* Manage Invites Tab */}
           <TabsContent value="manage">
             <Card className="shadow-lg">
-              <CardHeader className="flex flex-row items-center justify-between">
+              <CardHeader>
                 <div>
                   <CardTitle>Manage Invitations</CardTitle>
                   <CardDescription>
                     View and manage all sent invitations
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={refreshInvites}
-                  disabled={isLoading}
-                >
-                  <RefreshCw
-                    className={`h-4 w-4 mr-2 ${
-                      isLoading ? "animate-spin" : ""
-                    }`}
-                  />
-                  Refresh
-                </Button>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -324,90 +341,138 @@ export default function InviteUserPage() {
                     <p className="text-gray-600">No invitations sent yet</p>
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Invited Date</TableHead>
-                        <TableHead>Last Login</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {invites.map((invite) => (
-                        <TableRow key={invite.id}>
-                          <TableCell className="font-medium">
-                            {invite.email}
-                          </TableCell>
-                          <TableCell>{getStatusBadge(invite)}</TableCell>
-                          <TableCell>{formatDate(invite.created_at)}</TableCell>
-                          <TableCell>
-                            {invite.user_last_sign_in_at ? (
-                              <div className="text-sm">
-                                {formatDate(invite.user_last_sign_in_at)}
-                              </div>
-                            ) : invite.user_id ? (
-                              <span className="text-gray-400 italic text-sm">
-                                Never logged in
-                              </span>
-                            ) : (
-                              <span className="text-gray-400 italic text-sm">
-                                No account yet
+                  <div className="space-y-4">
+                    {/* Sort Controls */}
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center space-x-2">
+                        <Filter className="h-4 w-4 text-gray-500" />
+                        <Label className="text-sm font-medium text-gray-500">
+                          Sort by:
+                        </Label>
+                        <div className="flex space-x-2">
+                          <Button
+                            variant={
+                              sortField === "created_at" ? "default" : "outline"
+                            }
+                            size="sm"
+                            onClick={() => handleSort("created_at")}
+                            className="flex items-center space-x-1"
+                          >
+                            <span>Invited Date</span>
+                            {sortField === "created_at" && (
+                              <span className="text-xs">
+                                {sortOrder === "asc" ? "↑" : "↓"}
                               </span>
                             )}
-                          </TableCell>
-                          <TableCell>
-                            {invite.user_id && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="destructive"
-                                    size="sm"
-                                    className="gap-2"
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                    Delete User
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>
-                                      Delete User Account
-                                    </AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Are you sure you want to delete the user
-                                      account for{" "}
-                                      <strong>{invite.email}</strong>? This
-                                      action cannot be undone. The user will
-                                      lose access immediately and all their data
-                                      will be removed.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>
-                                      Cancel
-                                    </AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() =>
-                                        handleDeleteUser(
-                                          invite.user_id!,
-                                          invite.email
-                                        )
-                                      }
-                                      className="bg-red-600 hover:bg-red-700"
-                                    >
-                                      Delete User
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                          </Button>
+                          <Button
+                            variant={
+                              sortField === "user_last_sign_in_at"
+                                ? "default"
+                                : "outline"
+                            }
+                            size="sm"
+                            onClick={() => handleSort("user_last_sign_in_at")}
+                            className="flex items-center space-x-1"
+                          >
+                            <span>Last Login</span>
+                            {sortField === "user_last_sign_in_at" && (
+                              <span className="text-xs">
+                                {sortOrder === "asc" ? "↑" : "↓"}
+                              </span>
                             )}
-                          </TableCell>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Invited Date</TableHead>
+                          <TableHead>Last Login</TableHead>
+                          <TableHead>Actions</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {sortedInvites.map((invite) => (
+                          <TableRow key={invite.id}>
+                            <TableCell className="font-medium">
+                              {invite.email}
+                            </TableCell>
+                            <TableCell>{getStatusBadge(invite)}</TableCell>
+                            <TableCell>
+                              {formatDate(invite.created_at)}
+                            </TableCell>
+                            <TableCell>
+                              {invite.user_last_sign_in_at ? (
+                                <div className="text-sm">
+                                  {formatDate(invite.user_last_sign_in_at)}
+                                </div>
+                              ) : invite.user_id ? (
+                                <span className="text-gray-400 italic text-sm">
+                                  Never logged in
+                                </span>
+                              ) : (
+                                <span className="text-gray-400 italic text-sm">
+                                  No account yet
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {invite.user_id && (
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button
+                                      variant="destructive"
+                                      size="sm"
+                                      className="gap-2"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Delete User
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>
+                                        Delete User Account
+                                      </AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Are you sure you want to delete the user
+                                        account for{" "}
+                                        <strong>{invite.email}</strong>? This
+                                        action cannot be undone. The user will
+                                        lose access immediately and all their
+                                        data will be removed.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>
+                                        Cancel
+                                      </AlertDialogCancel>
+                                      <AlertDialogAction
+                                        onClick={() =>
+                                          handleDeleteUser(
+                                            invite.user_id!,
+                                            invite.email
+                                          )
+                                        }
+                                        className="bg-red-600 hover:bg-red-700"
+                                      >
+                                        Delete User
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 )}
               </CardContent>
             </Card>

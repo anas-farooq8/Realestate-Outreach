@@ -28,37 +28,18 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
-    // Check if user already exists by email using admin listUsers
-    const { data: usersList, error: listError } =
-      await supabase.auth.admin.listUsers();
-
-    if (listError) {
-      console.error("Error checking existing users:", listError);
-    }
-
-    const existingUserByEmail = usersList?.users?.find(
-      (user) => user.email === email
-    );
-
-    if (existingUserByEmail) {
-      return NextResponse.json(
-        { error: "User with this email already exists in the system" },
-        { status: 409 }
-      );
-    }
-
-    // Check if there's already a pending invitation for this email
+    // Check if we have already sent an invitation to this email
     const { data: existingInvite, error: inviteCheckError } = await supabase
       .from("invites")
-      .select("id, created_at")
+      .select("id, created_at, user_id")
       .eq("email", email)
       .single();
 
-    if (existingInvite && !inviteCheckError) {
+    // If we found an existing invite, we can't invite the same email again
+    if (existingInvite) {
       return NextResponse.json(
         {
-          error:
-            "You have already invited this user. Please check their email or wait for them to accept the invitation.",
+          error: "An invitation has already been sent to this email address",
         },
         { status: 409 }
       );
@@ -103,17 +84,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store invite details in invites table
-    const { error: inviteError } = await supabase.from("invites").insert({
-      id: crypto.randomUUID(),
+    // Create a new invite record with the user_id
+    const { error: inviteCreateError } = await supabase.from("invites").insert({
       email,
-      invited_by: process.env.ROOT_USER_EMAIL,
-      message: message || null,
+      invited_by: process.env.ROOT_USER_EMAIL!,
       user_id: newUser.user?.id,
+      message: message || null,
+      created_at: new Date().toUTCString(),
     });
 
-    if (inviteError) {
-      console.error("Error storing invite:", inviteError);
+    if (inviteCreateError) {
+      console.error("Error creating invite record:", inviteCreateError);
       // Continue anyway, user was created successfully
     }
 
