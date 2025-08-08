@@ -24,15 +24,6 @@ export interface InviteControllerState {
   isSubmitting: boolean;
 }
 
-/**
- * Client-side controller for invite management.
- * This class only contains client-side logic and API calls.
- * Server-side utilities are in lib/server-utils/invite-server-utils.ts
- *
- * Note: Authentication and user management is handled by:
- * - AuthContext: for user state and root user checking
- * - DataCache: for cached user ID retrieval
- */
 export class InviteController {
   // Load all invites sent by the current user
   async loadInvites(): Promise<{ invites: Invite[]; error: string | null }> {

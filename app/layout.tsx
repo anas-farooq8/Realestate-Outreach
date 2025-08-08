@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { Navbar } from "@/components/navbar";
+import { AuthProvider } from "@/lib/auth-context";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -55,8 +56,10 @@ export default function RootLayout({
         className={`${inter.className} touch-manipulation tap-highlight-none`}
         suppressHydrationWarning={true}
       >
-        <Navbar>{children}</Navbar>
-        <Toaster />
+        <AuthProvider>
+          <Navbar>{children}</Navbar>
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

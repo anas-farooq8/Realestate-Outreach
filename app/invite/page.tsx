@@ -169,31 +169,6 @@ export default function InviteUserPage() {
     );
   }
 
-  if (isAuthorized === false) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-lg shadow-xl">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 h-16 w-16 bg-red-100 rounded-full flex items-center justify-center">
-              <Shield className="h-8 w-8 text-red-600" />
-            </div>
-            <CardTitle className="text-2xl font-bold text-red-700 mb-2">
-              Access Denied
-            </CardTitle>
-            <CardDescription className="text-red-600">
-              You don't have permission to access this page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="text-center p-8">
-            <p className="text-gray-600 mb-6">
-              Only system administrators can invite new users to the platform.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6">
       <div className="space-y-8">

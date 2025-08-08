@@ -900,6 +900,7 @@ class DataCache {
   async getIsRootUser(): Promise<boolean> {
     // First ensure we have a current user
     const userId = await this.getCurrentUserId();
+    console.log("[getIsRootUser] userId:", userId);
     if (!userId) {
       return false;
     }
@@ -910,6 +911,7 @@ class DataCache {
     }
 
     await this.updateRootUserStatus();
+    console.log("[getIsRootUser] isRootUser:", this.isRootUser.valueOf());
     return this.isRootUser;
   }
 

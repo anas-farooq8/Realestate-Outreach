@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { useCachedAuth } from "@/hooks/use-cached-data";
+import { useAuth } from "@/lib/auth-context";
 import {
   InviteController,
   type InviteUser,
@@ -16,7 +16,13 @@ export function useInviteController() {
     isSubmitting: false,
   });
 
-  const { user, isRootUser, isAuthInitialized } = useCachedAuth();
+  const [hasInitialLoad, setHasInitialLoad] = useState(false);
+  const {
+    user,
+    isRootUser,
+    isAuthInitialized,
+    isLoading: authLoading,
+  } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
 
@@ -134,12 +140,27 @@ export function useInviteController() {
     checkAuthorization();
   }, [checkAuthorization]);
 
-  // Load invites when authorized
+  // Load invites when authorized - only run once when all conditions are met
   useEffect(() => {
-    if (user && isRootUser && isAuthInitialized) {
+    if (
+      user &&
+      isRootUser &&
+      isAuthInitialized &&
+      !authLoading &&
+      !hasInitialLoad
+    ) {
+      console.log("🔵 [INVITE CONTROLLER] Loading invites for the first time");
+      setHasInitialLoad(true);
       refreshData();
     }
-  }, [user, isRootUser, isAuthInitialized, refreshData]);
+  }, [
+    user,
+    isRootUser,
+    isAuthInitialized,
+    authLoading,
+    hasInitialLoad,
+    refreshData,
+  ]);
 
   // Set page title
   useEffect(() => {
@@ -151,7 +172,8 @@ export function useInviteController() {
   return {
     // State
     ...state,
-    isAuthorized: user && isRootUser,
+    isAuthorized:
+      user && isRootUser && !authLoading ? true : authLoading ? null : false,
 
     // Actions
     inviteUser,

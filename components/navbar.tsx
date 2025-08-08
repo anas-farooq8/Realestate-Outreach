@@ -15,7 +15,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { dataCache } from "@/lib/cache";
-import { useCachedAuth } from "@/hooks/use-cached-data";
+import { useAuth } from "@/lib/auth-context";
 import {
   Home,
   Upload,
@@ -40,7 +40,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ children }: NavbarProps) {
-  const { user, isRootUser, isLoading, isAuthInitialized } = useCachedAuth();
+  const { user, isRootUser, isLoading, isAuthInitialized } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -233,22 +233,52 @@ export function Navbar({ children }: NavbarProps) {
                 <div className="px-4">
                   <hr className="border-gray-200" />
                 </div>
-                <div className="px-4 py-4 space-y-2">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-4">
-                    {sidebarCollapsed ? "Admin" : "Administration"}
-                  </p>
-                  <Link
-                    href="/invite"
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      pathname === "/invite"
-                        ? "bg-green-50 text-green-700 border-r-4 border-green-700"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
-                    title={sidebarCollapsed ? "Invite User" : undefined}
-                  >
-                    <UserPlus className="h-5 w-5 flex-shrink-0" />
-                    {!sidebarCollapsed && <span>Invite User</span>}
-                  </Link>
+                <div
+                  className={`px-4 py-4 space-y-2 ${
+                    sidebarCollapsed ? "flex flex-col items-center" : ""
+                  }`}
+                >
+                  {sidebarCollapsed ? (
+                    <div
+                      className="flex flex-col items-center"
+                      title="Administration"
+                    >
+                      <div className="mb-2">
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                          A
+                        </span>
+                      </div>
+                      <Link
+                        href="/invite"
+                        className={`flex items-center justify-center px-0 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          pathname === "/invite"
+                            ? "bg-green-50 text-green-700 border-r-4 border-green-700"
+                            : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                        }`}
+                        title="Invite User"
+                      >
+                        <UserPlus className="h-5 w-5 flex-shrink-0" />
+                      </Link>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wide px-4">
+                        Administration
+                      </p>
+                      <Link
+                        href="/invite"
+                        className={`flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          pathname === "/invite"
+                            ? "bg-green-50 text-green-700 border-r-4 border-green-700"
+                            : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                        }`}
+                        title={sidebarCollapsed ? "Invite User" : undefined}
+                      >
+                        <UserPlus className="h-5 w-5 flex-shrink-0" />
+                        <span>Invite User</span>
+                      </Link>
+                    </>
+                  )}
                 </div>
               </>
             )}
