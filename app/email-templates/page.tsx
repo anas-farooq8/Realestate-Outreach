@@ -933,7 +933,7 @@ export default function EmailTemplatesPage() {
         <DialogContent
           className={
             isMobile
-              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
+              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md max-h-[90vh] overflow-y-auto [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
               : "max-w-2xl max-h-[90vh] overflow-y-auto"
           }
         >
@@ -1013,7 +1013,7 @@ export default function EmailTemplatesPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, signature: e.target.value })
                 }
-                placeholder="e.g., Lyndon S.\nTotal Body Mobile Massage – Outreach Team"
+                placeholder={`e.g., Lyndon S.\nTotal Body Mobile Massage – Outreach Team`}
                 className="mt-1"
                 rows={3}
               />
@@ -1031,15 +1031,20 @@ export default function EmailTemplatesPage() {
             </div>
           </div>
 
-          <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-2 mt-4">
             <Button
               variant="outline"
               onClick={handleCloseDialog}
               disabled={saving}
+              className="w-full sm:w-auto"
             >
               Cancel
             </Button>
-            <Button onClick={handleSaveTemplate} disabled={saving}>
+            <Button
+              onClick={handleSaveTemplate}
+              disabled={saving}
+              className="w-full sm:w-auto"
+            >
               {saving ? (
                 <>
                   <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -1060,7 +1065,13 @@ export default function EmailTemplatesPage() {
         open={isDeleteDialogOpen}
         onOpenChange={setIsDeleteDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent
+          className={
+            isMobile
+              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md max-h-[90vh] overflow-y-auto"
+              : "max-w-md"
+          }
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Email Template</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1068,13 +1079,16 @@ export default function EmailTemplatesPage() {
               {templateToDelete?.template_name}"? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={handleDeleteCancel}>
+          <AlertDialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-2 mt-4">
+            <AlertDialogCancel
+              onClick={handleDeleteCancel}
+              className="w-full sm:w-auto"
+            >
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
-              className="bg-red-600 hover:bg-red-700"
+              className="w-full sm:w-auto bg-red-600 hover:bg-red-700"
             >
               Delete Template
             </AlertDialogAction>
@@ -1087,7 +1101,7 @@ export default function EmailTemplatesPage() {
         <DialogContent
           className={
             isMobile
-              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
+              ? "max-w-[calc(100vw-2rem)] mx-auto sm:max-w-md max-h-[90vh] overflow-y-auto [&>button]:flex [&>button]:items-center [&>button]:justify-center [&>button]:w-6 [&>button]:h-6"
               : "max-w-2xl max-h-[90vh] overflow-y-auto"
           }
         >
@@ -1097,7 +1111,6 @@ export default function EmailTemplatesPage() {
               Preview of "{previewTemplate?.template_name}"
             </DialogDescription>
           </DialogHeader>
-
           {previewTemplate && (
             <div className="space-y-4">
               <div>
@@ -1108,7 +1121,6 @@ export default function EmailTemplatesPage() {
                   {previewTemplate.subject || "No subject"}
                 </div>
               </div>
-
               {previewTemplate.hook && (
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -1119,7 +1131,6 @@ export default function EmailTemplatesPage() {
                   </div>
                 </div>
               )}
-
               <div>
                 <Label className="text-sm font-medium text-gray-700">
                   Body:
@@ -1128,18 +1139,20 @@ export default function EmailTemplatesPage() {
                   {previewTemplate.body}
                 </div>
               </div>
-
-              {previewTemplate.signature && (
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Signature:
-                  </Label>
-                  <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">
-                    {previewTemplate.signature}
-                  </div>
+              <div>
+                <Label className="text-sm font-medium text-gray-700">
+                  Signature:
+                </Label>
+                <div className="mt-1 p-3 bg-gray-50 rounded-md whitespace-pre-wrap">
+                  {previewTemplate.signature || (
+                    <span className="text-gray-400">
+                      e.g., Lyndon S.
+                      <br />
+                      Total Body Mobile Massage – Outreach Team
+                    </span>
+                  )}
                 </div>
-              )}
-
+              </div>
               <div className="flex items-center space-x-2">
                 <Badge
                   variant={previewTemplate.is_active ? "default" : "secondary"}
@@ -1150,8 +1163,12 @@ export default function EmailTemplatesPage() {
             </div>
           )}
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+          <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-2 mt-4">
+            <Button
+              variant="outline"
+              onClick={() => setIsPreviewOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Close
             </Button>
             <Button
@@ -1159,6 +1176,7 @@ export default function EmailTemplatesPage() {
                 setIsPreviewOpen(false);
                 handleOpenDialog(previewTemplate!);
               }}
+              className="w-full sm:w-auto"
             >
               Edit Template
             </Button>
