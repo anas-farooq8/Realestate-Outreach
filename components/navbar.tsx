@@ -187,7 +187,7 @@ export function Navbar({ children }: NavbarProps) {
         {/* Desktop Sidebar */}
         <div
           className={`hidden lg:flex lg:flex-col ${
-            sidebarCollapsed ? "lg:w-20" : "lg:w-64"
+            sidebarCollapsed ? "lg:w-20" : "lg:w-72"
           } transition-all duration-300 ease-in-out`}
         >
           <div className="flex flex-col flex-1 bg-white shadow-lg">
