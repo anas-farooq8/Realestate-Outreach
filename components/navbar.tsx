@@ -5,6 +5,16 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +39,9 @@ import {
   UserPlus,
   X,
   Globe,
+  Key,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   Sheet,
@@ -47,6 +60,14 @@ export function Navbar({ children }: NavbarProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -118,6 +139,64 @@ export function Navbar({ children }: NavbarProps) {
         description: "Failed to sign out. Please try again.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Please fill in all fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      const { error } = await supabase.auth.updateUser({
+        password: passwordForm.newPassword,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Password changed successfully.",
+      });
+
+      // Reset form and close dialog
+      setPasswordForm({ newPassword: "", confirmPassword: "" });
+      setPasswordDialogOpen(false);
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description:
+          error instanceof Error ? error.message : "Failed to change password.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -505,6 +584,129 @@ export function Navbar({ children }: NavbarProps) {
                       </div>
                     </div>
                     <DropdownMenuSeparator />
+
+                    <Dialog
+                      open={passwordDialogOpen}
+                      onOpenChange={setPasswordDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <DropdownMenuItem
+                          className="cursor-pointer"
+                          onSelect={(e) => {
+                            e.preventDefault();
+                            setPasswordDialogOpen(true);
+                          }}
+                        >
+                          <Key className="mr-2 h-4 w-4" />
+                          <span>Change Password</span>
+                        </DropdownMenuItem>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Change Password</DialogTitle>
+                          <DialogDescription>
+                            Enter your new password below. Make sure it's at
+                            least 6 characters long.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="new-password">New Password</Label>
+                            <div className="relative">
+                              <Input
+                                id="new-password"
+                                type={showNewPassword ? "text" : "password"}
+                                value={passwordForm.newPassword}
+                                onChange={(e) =>
+                                  setPasswordForm((prev) => ({
+                                    ...prev,
+                                    newPassword: e.target.value,
+                                  }))
+                                }
+                                placeholder="Enter new password"
+                                className="pr-10"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() =>
+                                  setShowNewPassword(!showNewPassword)
+                                }
+                              >
+                                {showNewPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="confirm-password">
+                              Confirm New Password
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                id="confirm-password"
+                                type={showConfirmPassword ? "text" : "password"}
+                                value={passwordForm.confirmPassword}
+                                onChange={(e) =>
+                                  setPasswordForm((prev) => ({
+                                    ...prev,
+                                    confirmPassword: e.target.value,
+                                  }))
+                                }
+                                placeholder="Confirm new password"
+                                className="pr-10"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                                onClick={() =>
+                                  setShowConfirmPassword(!showConfirmPassword)
+                                }
+                              >
+                                {showConfirmPassword ? (
+                                  <EyeOff className="h-4 w-4" />
+                                ) : (
+                                  <Eye className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex justify-end space-x-2">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setPasswordDialogOpen(false);
+                              setPasswordForm({
+                                newPassword: "",
+                                confirmPassword: "",
+                              });
+                              setShowNewPassword(false);
+                              setShowConfirmPassword(false);
+                            }}
+                            disabled={isChangingPassword}
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            onClick={handlePasswordChange}
+                            disabled={isChangingPassword}
+                          >
+                            {isChangingPassword
+                              ? "Changing..."
+                              : "Change Password"}
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+
                     <DropdownMenuItem
                       onClick={handleSignOut}
                       className="cursor-pointer text-red-600"
