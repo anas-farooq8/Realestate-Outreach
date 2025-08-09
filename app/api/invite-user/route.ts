@@ -177,7 +177,7 @@ function createInviteEmailTemplate({
       </div>
       
       <div style="background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1); border: 1px solid #dbeafe;">
-        <h2 style="color: #1e40af; margin-bottom: 20px; font-weight: 600;">Hello!</h2>
+        <h2 style="color: #1e40af; margin-bottom: 20px; font-weight: 600;">Hello! ${email} </h2>
         
         <p style="margin-bottom: 20px; color: #374151;">You've been invited to join our Real Estate Outreach platform by <strong style="color: #1d4ed8;">${invitedBy}</strong>.</p>
         
@@ -194,7 +194,7 @@ function createInviteEmailTemplate({
         <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); padding: 20px; border-radius: 10px; margin-bottom: 25px; border: 1px solid #bae6fd;">
           <h3 style="color: #0369a1; margin-top: 0; margin-bottom: 15px; font-weight: 600;">Your Login Credentials:</h3>
           <p style="margin-bottom: 10px; color: #374151;"><strong>Email:</strong> <code style="background: #dbeafe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-family: monospace; border: 1px solid #bfdbfe;">${email}</code></p>
-          <p style="margin-bottom: 15px; color: #374151;"><strong>Temporary Password:</strong> <code style="background: #dbeafe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-family: monospace; border: 1px solid #bfdbfe;">${temporaryPassword}</code></p>
+          <p style="margin-bottom: 15px; color: #374151;"><strong>Password:</strong> <code style="background: #dbeafe; color: #1e40af; padding: 6px 10px; border-radius: 6px; font-family: monospace; border: 1px solid #bfdbfe;">${temporaryPassword}</code></p>
           <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 12px; margin-top: 15px;">
             <p style="margin: 0; font-size: 14px; color: #92400e;">
               <strong>Important:</strong> Please change your password after your first login for security.
