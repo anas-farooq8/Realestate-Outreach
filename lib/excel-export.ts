@@ -27,8 +27,8 @@ export async function exportToExcel(
       { header: "Template Name", key: "templateName", width: 20 },
       { header: "Campaign Week", key: "campaignWeek", width: 15 },
       { header: "Sent At", key: "sentAt", width: 20 },
-      { header: "Reply Status", key: "replied", width: 15 },
       { header: "Replied At", key: "repliedAt", width: 20 },
+      { header: "Reply Status", key: "replied", width: 15 },
     ];
 
     // Add data rows for email logs
@@ -40,42 +40,45 @@ export async function exportToExcel(
         templateName: log.email_templates?.template_name || "",
         campaignWeek: log.campaign_week || "",
         sentAt: new Date(log.sent_at).toLocaleString(),
-        replied: log.replied ? "Yes" : "No",
         repliedAt: log.replied_at
           ? new Date(log.replied_at).toLocaleString()
           : "",
+        replied: log.replied ? "Yes" : "No",
       });
     });
   } else {
     // Define columns for properties
     worksheet.columns = [
       { header: "Property Name", key: "propertyName", width: 25 },
-      { header: "City", key: "city", width: 15 },
-      { header: "County", key: "county", width: 15 },
-      { header: "State", key: "state", width: 10 },
-      { header: "Zip Code", key: "zipCode", width: 12 },
+      { header: "HOA/Management Company", key: "hoaManagement", width: 25 },
       { header: "Decision Maker", key: "decisionMaker", width: 20 },
       { header: "Email", key: "email", width: 25 },
       { header: "Phone", key: "phone", width: 15 },
-      { header: "HOA/Management Company", key: "hoaManagement", width: 25 },
+      { header: "State", key: "state", width: 10 },
+      { header: "County", key: "county", width: 15 },
+      { header: "City", key: "city", width: 15 },
+      { header: "Zip Code", key: "zipCode", width: 12 },
+      { header: "Status", key: "status", width: 15 },
       { header: "Created At", key: "createdAt", width: 15 },
-      { header: "Updated At", key: "updatedAt", width: 15 },
     ];
 
     // Add data rows for properties
     (data as Property[]).forEach((property) => {
       worksheet.addRow({
         propertyName: property.property_address || "",
-        city: property.city || "",
-        county: property.county || "",
-        state: property.state || "",
-        zipCode: property.zip_code || "",
+        hoaManagement: property.hoa_or_management_company || "",
         decisionMaker: property.decision_maker_name || "",
         email: property.decision_maker_email || "",
         phone: property.decision_maker_phone || "",
-        hoaManagement: property.hoa_or_management_company || "",
+        state: property.state || "",
+        county: property.county || "",
+        city: property.city || "",
+        zipCode: property.zip_code || "",
+        status:
+          new Date(property.suspend_until) <= new Date()
+            ? "Unsubscribed"
+            : "Subscribed",
         createdAt: new Date(property.created_at).toLocaleDateString(),
-        updatedAt: new Date(property.updated_at).toLocaleDateString(),
       });
     });
   }

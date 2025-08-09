@@ -147,7 +147,7 @@ export default function DashboardPage() {
   const isSubscribed = (suspendUntil: string) => {
     const suspendDate = new Date(suspendUntil);
     const currentDate = new Date();
-    return suspendDate < currentDate;
+    return suspendDate <= currentDate;
   };
 
   const applyFilters = () => {
