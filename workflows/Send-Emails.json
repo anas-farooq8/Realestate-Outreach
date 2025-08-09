@@ -111,7 +111,7 @@
     },
     {
       "parameters": {
-        "content": "# ✉ Email Campaign Automation\n\n## Features\n- Sends emails from pre-created templates to property managers via Gmail\n- Batch processing (10 properties at a time)\n- Campaign week tracking & auto-increment\n- Activity logging with email/thread IDs\n- Respects suspension dates\n\n## Function Flow\n1. Get current email template from Supabase\n2. Format HTML email content\n3. Fetch active properties (suspend_until ≤ today)\n4. Loop through properties in batches\n5. Send Gmail → Log activity → Update campaign progress\n\n## Setup Requirements\n**Credentials:**\n- Gmail OAuth2 (for sending)\n- Supabase API (for database)\n\n**Database Tables:**\n- `email_templates` - campaign content\n- `properties` - owner contact info\n- `email_logs` - delivery tracking\n- `campaign_progress` - week counter\n\n## Key Settings\n- **Batch Size**: 10 properties per loop\n- **Sender Name**: \"Lyndon S.\"\n- **Reply-to**: Sender only\n- **Error Handling**: Continue on failure\n- **Retry**: Enabled on all nodes\n",
+        "content": "# ✉ Email Campaign Automation\n\n## Features\n- Sends emails from pre-created templates to property managers via Gmail\n- Batch processing (10 emails at a time)\n- Campaign week tracking & auto-increment\n- Activity logging with email/thread IDs\n- Respects suspension dates\n\n## Function Flow\n1. Get current email template from Supabase\n2. Format HTML email content\n3. Fetch active properties (suspend_until ≤ today)\n4. Loop through properties in batches\n5. Send Gmail → Log activity → Update campaign progress\n\n## Setup Requirements\n**Credentials:**\n- Gmail OAuth2 (for sending)\n- Supabase API (for database)\n\n**Database Tables:**\n- `email_templates` - campaign content\n- `properties` - owner contact info\n- `email_logs` - delivery tracking\n- `campaign_progress` - week counter\n\n## Key Settings\n- **Batch Size**: 10 properties per loop\n- **Sender Name**: \"Lyndon S.\"\n- **Reply-to**: Sender only\n- **Error Handling**: Continue on failure\n- **Retry**: Enabled on all nodes\n",
         "height": 880,
         "width": 2032,
         "color": 4
@@ -154,8 +154,18 @@
         "operation": "getAll",
         "tableId": "properties",
         "returnAll": true,
+        "matchType": "allFilters",
         "filters": {
           "conditions": [
+            {
+              "keyName": "decision_maker_email",
+              "condition": "=not.is",
+              "keyValue": "null"
+            },
+            {
+              "keyName": "decision_maker_email",
+              "condition": "neq"
+            },
             {
               "keyName": "suspend_until",
               "condition": "lte",
