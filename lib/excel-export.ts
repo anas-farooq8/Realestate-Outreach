@@ -50,7 +50,6 @@ export async function exportToExcel(
     // Define columns for properties
     worksheet.columns = [
       { header: "Property Name", key: "propertyName", width: 25 },
-      { header: "Street", key: "street", width: 25 },
       { header: "City", key: "city", width: 15 },
       { header: "County", key: "county", width: 15 },
       { header: "State", key: "state", width: 10 },
@@ -67,7 +66,6 @@ export async function exportToExcel(
     (data as Property[]).forEach((property) => {
       worksheet.addRow({
         propertyName: property.property_address || "",
-        street: property.street || "",
         city: property.city || "",
         county: property.county || "",
         state: property.state || "",

@@ -58,7 +58,6 @@ async function processPropertiesAsync(
       // Insert into properties table with correct schema
       const { error: insertError } = await supabase.from("properties").insert({
         property_address: propertyName, // Store only the property name
-        street: enrichedData.street_address,
         city: enrichedData.city,
         county: enrichedData.county,
         state: enrichedData.state,

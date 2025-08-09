@@ -135,7 +135,6 @@ export async function enrichPropertyData(
         "decision_maker_name": "Name if found",
         "email": "email@domain.com if found",
         "phone": "phone number if found",
-        "street": "street address if found",
         "city": "city name if found",
         "county": "county name only (no 'County' word)",
         "state": "full state name",

@@ -13,7 +13,6 @@ export interface Property {
   updated_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
   opt_out_code: string; // UUID - NOT NULL DEFAULT gen_random_uuid() UNIQUE
   hoa_or_management_company: string | null;
-  street: string | null;
 }
 
 export interface ExtractedProperty {

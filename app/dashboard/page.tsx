@@ -514,23 +514,24 @@ export default function DashboardPage() {
   const loading = propertiesLoading || emailLogsLoading || campaignLoading;
 
   return (
-    <div className="p-6">
-      <div className="space-y-8">
+    <div className="p-3 md:p-6">
+      <div className="space-y-4 md:space-y-8">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">
               Analytics Dashboard
             </h1>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-1 md:mt-2 text-sm md:text-base text-gray-600">
               Comprehensive real estate email campaign analytics and management
             </p>
           </div>
-          <div className="flex space-x-4">
+          <div className="flex space-x-2 md:space-x-4">
             <Button
               onClick={handleRefresh}
               variant="outline"
               disabled={loading}
+              className="hidden md:flex"
             >
               <RefreshCw
                 className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`}
@@ -540,61 +541,66 @@ export default function DashboardPage() {
             <Button
               onClick={handleExport}
               disabled={paginatedItems.length === 0}
+              size="sm"
+              className="md:text-base text-sm"
             >
-              <Download className="mr-2 h-4 w-4" />
-              Export {currentView}
+              <Download className="mr-1 md:mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Export </span>
+              {currentView}
             </Button>
           </div>
         </div>
 
         {/* Campaign Status */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center">
-              <Target className="mr-2 h-5 w-5" />
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="flex items-center text-lg md:text-xl">
+              <Target className="mr-2 h-4 w-4 md:h-5 md:w-5" />
               Campaign Status
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Current campaign progress and active template
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-full bg-blue-100">
-                  <Calendar className="h-6 w-6 text-blue-600" />
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+              <div className="flex items-center space-x-2 md:space-x-4">
+                <div className="p-2 md:p-3 rounded-full bg-blue-100">
+                  <Calendar className="h-4 w-4 md:h-6 md:w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Current Week
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-lg md:text-2xl font-bold">
                     Week {campaignProgress?.current_week || 1}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-full bg-green-100">
-                  <MessageSquare className="h-6 w-6 text-green-600" />
+              <div className="flex items-center space-x-2 md:space-x-4">
+                <div className="p-2 md:p-3 rounded-full bg-green-100">
+                  <MessageSquare className="h-4 w-4 md:h-6 md:w-6 text-green-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Active Template
                   </p>
-                  <p className="text-lg font-semibold">
+                  <p className="text-sm md:text-lg font-semibold truncate max-w-[120px] md:max-w-none">
                     {currentTemplate?.template_name || "No active template"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-full bg-purple-100">
-                  <Clock className="h-6 w-6 text-purple-600" />
+              <div className="flex items-center space-x-2 md:space-x-4">
+                <div className="p-2 md:p-3 rounded-full bg-purple-100">
+                  <Clock className="h-4 w-4 md:h-6 md:w-6 text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">Last Sent</p>
-                  <p className="text-lg font-semibold">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
+                    Last Sent
+                  </p>
+                  <p className="text-sm md:text-lg font-semibold">
                     {campaignProgress?.last_sent_at
                       ? new Date(
                           campaignProgress.last_sent_at
@@ -604,18 +610,18 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
-                <div className="p-3 rounded-full bg-orange-100">
-                  <FileText className="h-6 w-6 text-orange-600" />
+              <div className="flex items-center space-x-2 md:space-x-4">
+                <div className="p-2 md:p-3 rounded-full bg-orange-100">
+                  <FileText className="h-4 w-4 md:h-6 md:w-6 text-orange-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-500">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Selected PDF
                   </p>
                   {selectedPdfUrl ? (
                     <div className="space-y-1">
                       <p
-                        className="text-sm font-semibold text-green-700 truncate max-w-[200px]"
+                        className="text-xs md:text-sm font-semibold text-green-700 truncate max-w-[120px] md:max-w-[200px]"
                         title={getPdfDisplayName(selectedPdfUrl)}
                       >
                         {getPdfDisplayName(selectedPdfUrl)}
@@ -624,19 +630,21 @@ export default function DashboardPage() {
                         variant="outline"
                         size="sm"
                         onClick={() => window.open(selectedPdfUrl, "_blank")}
-                        className="text-xs h-6 px-2"
+                        className="text-xs h-5 md:h-6 px-1 md:px-2"
                       >
                         View PDF
                       </Button>
                     </div>
                   ) : (
                     <div className="space-y-1">
-                      <p className="text-sm text-gray-500">No PDF selected</p>
+                      <p className="text-xs md:text-sm text-gray-500">
+                        No PDF selected
+                      </p>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => (window.location.href = "/proposals")}
-                        className="text-xs h-6 px-2"
+                        className="text-xs h-5 md:h-6 px-1 md:px-2"
                       >
                         Select PDF
                       </Button>
@@ -649,16 +657,16 @@ export default function DashboardPage() {
         </Card>
 
         {/* Statistics Overview - Dynamic based on filtered data */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-3 md:p-6">
               <div className="flex items-center">
-                <Users className="h-8 w-8 text-blue-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">
+                <Users className="h-6 w-6 md:h-8 md:w-8 text-blue-500" />
+                <div className="ml-2 md:ml-4">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Total Properties
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-lg md:text-2xl font-bold">
                     {calculateFilteredStats().totalProperties.toLocaleString()}
                   </p>
                 </div>
@@ -667,14 +675,14 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-3 md:p-6">
               <div className="flex items-center">
-                <Mail className="h-8 w-8 text-green-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">
+                <Mail className="h-6 w-6 md:h-8 md:w-8 text-green-500" />
+                <div className="ml-2 md:ml-4">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Emails Sent
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-lg md:text-2xl font-bold">
                     {calculateFilteredStats().totalEmailsSent.toLocaleString()}
                   </p>
                 </div>
@@ -683,14 +691,14 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-3 md:p-6">
               <div className="flex items-center">
-                <MessageSquare className="h-8 w-8 text-purple-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">
+                <MessageSquare className="h-6 w-6 md:h-8 md:w-8 text-purple-500" />
+                <div className="ml-2 md:ml-4">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Total Replies
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-lg md:text-2xl font-bold">
                     {calculateFilteredStats().totalReplies.toLocaleString()}
                   </p>
                 </div>
@@ -699,14 +707,14 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-3 md:p-6">
               <div className="flex items-center">
-                <TrendingUp className="h-8 w-8 text-orange-500" />
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-500">
+                <TrendingUp className="h-6 w-6 md:h-8 md:w-8 text-orange-500" />
+                <div className="ml-2 md:ml-4">
+                  <p className="text-xs md:text-sm font-medium text-gray-500">
                     Reply Rate
                   </p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-lg md:text-2xl font-bold">
                     {calculateFilteredStats().replyRate.toFixed(1)}%
                   </p>
                 </div>
@@ -717,13 +725,13 @@ export default function DashboardPage() {
 
         {/* View Toggle and Filters */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="flex flex-col md:flex-row items-start md:items-center justify-between space-y-2 md:space-y-0">
               <div className="flex items-center">
-                <Filter className="mr-2 h-5 w-5" />
-                Data Management
+                <Filter className="mr-2 h-4 w-4 md:h-5 md:w-5" />
+                <span className="text-lg md:text-xl">Data Management</span>
               </div>
-              <div className="flex space-x-2">
+              <div className="flex space-x-1 md:space-x-2">
                 <Button
                   variant={currentView === "properties" ? "default" : "outline"}
                   size="sm"
@@ -735,6 +743,7 @@ export default function DashboardPage() {
                       createdAtSort: "desc",
                     }));
                   }}
+                  className="text-xs md:text-sm"
                 >
                   Properties ({filteredProperties.length})
                 </Button>
@@ -742,17 +751,18 @@ export default function DashboardPage() {
                   variant={currentView === "logs" ? "default" : "outline"}
                   size="sm"
                   onClick={() => setCurrentView("logs")}
+                  className="text-xs md:text-sm"
                 >
                   Email Logs ({filteredEmailLogs.length})
                 </Button>
               </div>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               Search and filter data across properties and email campaigns
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="pt-0">
+            <div className="space-y-3 md:space-y-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
@@ -760,12 +770,206 @@ export default function DashboardPage() {
                   placeholder="Search properties, names, companies, emails, templates..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
+                  className="pl-10 text-sm"
                 />
               </div>
 
-              {/* Single Row Filters */}
-              <div className="flex flex-wrap items-center gap-3">
+              {/* Mobile Filters - Stacked Layout */}
+              <div className="md:hidden space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">State:</Label>
+                    <Select
+                      value={filters.state}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, state: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {uniqueStates.map((state) => (
+                          <SelectItem key={state} value={state}>
+                            {state}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">County:</Label>
+                    <Select
+                      value={filters.county}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, county: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {uniqueCounties.map((county) => (
+                          <SelectItem key={county} value={county}>
+                            {county}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">City:</Label>
+                    <Select
+                      value={filters.city}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, city: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {uniqueCities.map((city) => (
+                          <SelectItem key={city} value={city}>
+                            {city}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs">Zip:</Label>
+                    <Select
+                      value={filters.zipCode}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, zipCode: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {uniqueZipCodes.map((zipCode) => (
+                          <SelectItem key={zipCode} value={zipCode}>
+                            {zipCode}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Property-specific filters - Mobile */}
+                {currentView === "properties" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Status:</Label>
+                    <Select
+                      value={filters.subscriptionStatus}
+                      onValueChange={(value) =>
+                        setFilters({ ...filters, subscriptionStatus: value })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="subscribed">Subscribed</SelectItem>
+                        <SelectItem value="unsubscribed">
+                          Unsubscribed
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {/* Email-specific filters - Mobile */}
+                {currentView === "logs" && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Week:</Label>
+                        <Select
+                          value={filters.campaignWeek}
+                          onValueChange={(value) =>
+                            setFilters({ ...filters, campaignWeek: value })
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="All" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            {uniqueWeeks.map((week) => (
+                              <SelectItem key={week} value={week.toString()}>
+                                {week}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <Label className="text-xs">Reply:</Label>
+                        <Select
+                          value={filters.replyStatus}
+                          onValueChange={(value) =>
+                            setFilters({ ...filters, replyStatus: value })
+                          }
+                        >
+                          <SelectTrigger className="h-8 text-xs">
+                            <SelectValue placeholder="All" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
+                            <SelectItem value="replied">Replied</SelectItem>
+                            <SelectItem value="not-replied">
+                              No Reply
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-xs">Template:</Label>
+                      <Select
+                        value={filters.template}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, template: value })
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          {emailTemplates.map((template) => (
+                            <SelectItem
+                              key={template.id}
+                              value={template.id.toString()}
+                            >
+                              {template.template_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Desktop Filters - Single Row Layout */}
+              <div className="hidden md:flex flex-wrap items-center gap-3">
                 {/* Location Filters */}
                 <div className="flex items-center space-x-2">
                   <Label className="text-sm whitespace-nowrap">State:</Label>
@@ -958,23 +1162,28 @@ export default function DashboardPage() {
 
               {/* Sort controls - show below filters */}
               {currentView === "properties" && (
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-center space-x-4">
-                    <Label className="text-sm font-medium text-gray-700">
+                <div className="pt-3 md:pt-4 border-t border-gray-200">
+                  <div className="flex items-center space-x-2 md:space-x-4">
+                    <Label className="text-xs md:text-sm font-medium text-gray-700">
                       Sort by:
                     </Label>
                     <Button
                       variant="default"
                       size="sm"
                       onClick={handleCreatedAtSortChange}
-                      className="bg-black hover:bg-gray-800 text-white flex items-center space-x-2"
+                      className="bg-black hover:bg-gray-800 text-white flex items-center space-x-1 md:space-x-2 text-xs md:text-sm"
                     >
                       <span>Created</span>
                       <span className="text-xs font-bold">
                         {filters.createdAtSort === "desc" ? "↓" : "↑"}
                       </span>
                     </Button>
-                    <Button onClick={clearFilters} variant="outline" size="sm">
+                    <Button
+                      onClick={clearFilters}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs md:text-sm"
+                    >
                       Clear Filters
                     </Button>
                   </div>
@@ -983,9 +1192,9 @@ export default function DashboardPage() {
 
               {/* Email logs sort controls */}
               {currentView === "logs" && (
-                <div className="pt-4 border-t border-gray-200">
-                  <div className="flex items-center space-x-4">
-                    <Label className="text-sm font-medium text-gray-700">
+                <div className="pt-3 md:pt-4 border-t border-gray-200">
+                  <div className="flex flex-wrap items-center gap-2 md:space-x-4">
+                    <Label className="text-xs md:text-sm font-medium text-gray-700">
                       Sort by:
                     </Label>
                     <Button
@@ -996,7 +1205,7 @@ export default function DashboardPage() {
                       }
                       size="sm"
                       onClick={() => handleEmailLogSortChange("sent_at")}
-                      className={`flex items-center space-x-2 ${
+                      className={`flex items-center space-x-1 md:space-x-2 text-xs md:text-sm ${
                         filters.emailLogSort === "sent_at"
                           ? "bg-black hover:bg-gray-800 text-white"
                           : ""
@@ -1017,7 +1226,7 @@ export default function DashboardPage() {
                       }
                       size="sm"
                       onClick={() => handleEmailLogSortChange("replied_at")}
-                      className={`flex items-center space-x-2 ${
+                      className={`flex items-center space-x-1 md:space-x-2 text-xs md:text-sm ${
                         filters.emailLogSort === "replied_at"
                           ? "bg-black hover:bg-gray-800 text-white"
                           : ""
@@ -1030,7 +1239,12 @@ export default function DashboardPage() {
                         </span>
                       )}
                     </Button>
-                    <Button onClick={clearFilters} variant="outline" size="sm">
+                    <Button
+                      onClick={clearFilters}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs md:text-sm"
+                    >
                       Clear Filters
                     </Button>
                   </div>
@@ -1042,15 +1256,15 @@ export default function DashboardPage() {
 
         {/* Data Table */}
         <Card>
-          <CardHeader>
-            <CardTitle>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-lg md:text-xl">
               {currentView === "properties" ? "Properties" : "Email Logs"}(
               {currentView === "properties"
                 ? filteredProperties.length
                 : filteredEmailLogs.length}
               )
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-sm">
               {(currentView === "properties"
                 ? filteredProperties.length
                 : filteredEmailLogs.length) !==
@@ -1071,15 +1285,17 @@ export default function DashboardPage() {
                 ` • Page ${currentPage} of ${totalPages}`}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-0">
             {loading ? (
               <div className="flex flex-col items-center justify-center py-8 space-y-4">
                 <RefreshCw className="h-8 w-8 animate-spin" />
-                <p className="text-gray-500">Loading {currentView}...</p>
+                <p className="text-gray-500 text-sm">
+                  Loading {currentView}...
+                </p>
               </div>
             ) : paginatedItems.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500">
+                <p className="text-gray-500 text-sm">
                   No {currentView}{" "}
                   {searchTerm || Object.values(filters).some((f) => f !== "all")
                     ? "match your filters"
@@ -1088,7 +1304,163 @@ export default function DashboardPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-md border overflow-x-auto">
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-3">
+                  {currentView === "properties"
+                    ? (paginatedItems as Property[]).map((property) => (
+                        <Card key={property.id} className="p-3">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <h3 className="font-medium text-sm truncate flex-1 mr-2">
+                                {property.property_address || "—"}
+                              </h3>
+                              <Badge
+                                variant={
+                                  property.suspend_until &&
+                                  isSubscribed(property.suspend_until)
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs"
+                              >
+                                {property.suspend_until &&
+                                isSubscribed(property.suspend_until)
+                                  ? "Subscribed"
+                                  : "Unsubscribed"}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span className="font-medium">
+                                  HOA/Management:
+                                </span>
+                                <p className="truncate">
+                                  {property.hoa_or_management_company || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  Decision Maker:
+                                </span>
+                                <p className="truncate">
+                                  {property.decision_maker_name || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Email:</span>
+                                {property.decision_maker_email &&
+                                !property.decision_maker_email.includes(
+                                  "noemail"
+                                ) ? (
+                                  <a
+                                    href={`mailto:${property.decision_maker_email}`}
+                                    className="text-blue-600 hover:underline truncate block"
+                                  >
+                                    {property.decision_maker_email}
+                                  </a>
+                                ) : (
+                                  <p>—</p>
+                                )}
+                              </div>
+                              <div>
+                                <span className="font-medium">Phone:</span>
+                                <p className="truncate">
+                                  {property.decision_maker_phone || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Location:</span>
+                                <p className="truncate">
+                                  {property.city}, {property.state}{" "}
+                                  {property.zip_code}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Created:</span>
+                                <p>
+                                  {new Date(
+                                    property.created_at
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      ))
+                    : (paginatedItems as EmailLog[]).map((log) => (
+                        <Card key={log.id} className="p-3">
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-start">
+                              <h3 className="font-medium text-sm truncate flex-1 mr-2">
+                                {log.properties?.property_address || "—"}
+                              </h3>
+                              <Badge
+                                variant={log.replied ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {log.replied ? "Replied" : "No Reply"}
+                              </Badge>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                              <div>
+                                <span className="font-medium">
+                                  Decision Maker:
+                                </span>
+                                <p className="truncate">
+                                  {log.properties?.decision_maker_name || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">
+                                  Campaign Week:
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  Week {log.campaign_week}
+                                </Badge>
+                              </div>
+                              <div>
+                                <span className="font-medium">Email:</span>
+                                {log.properties?.decision_maker_email ? (
+                                  <a
+                                    href={`mailto:${log.properties.decision_maker_email}`}
+                                    className="text-blue-600 hover:underline truncate block"
+                                  >
+                                    {log.properties.decision_maker_email}
+                                  </a>
+                                ) : (
+                                  <p>—</p>
+                                )}
+                              </div>
+                              <div>
+                                <span className="font-medium">Template:</span>
+                                <p className="truncate">
+                                  {log.email_templates?.template_name || "—"}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Sent At:</span>
+                                <p>
+                                  {new Date(log.sent_at).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <div>
+                                <span className="font-medium">Replied At:</span>
+                                <p>
+                                  {log.replied_at
+                                    ? new Date(
+                                        log.replied_at
+                                      ).toLocaleDateString()
+                                    : "—"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      ))}
+                </div>
+
+                {/* Desktop Table View */}
+                <div className="hidden md:block rounded-md border overflow-x-auto">
                   {currentView === "properties" ? (
                     <Table>
                       <TableHeader>
@@ -1098,8 +1470,9 @@ export default function DashboardPage() {
                           <TableHead>Decision Maker</TableHead>
                           <TableHead>Email</TableHead>
                           <TableHead>Phone</TableHead>
-                          <TableHead>City</TableHead>
                           <TableHead>State</TableHead>
+                          <TableHead>County</TableHead>
+                          <TableHead>City</TableHead>
                           <TableHead>Zip</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Created</TableHead>
@@ -1135,8 +1508,9 @@ export default function DashboardPage() {
                             <TableCell>
                               {property.decision_maker_phone || "—"}
                             </TableCell>
-                            <TableCell>{property.city || "—"}</TableCell>
                             <TableCell>{property.state || "—"}</TableCell>
+                            <TableCell>{property.county || "—"}</TableCell>
+                            <TableCell>{property.city || "—"}</TableCell>
                             <TableCell>{property.zip_code || "—"}</TableCell>
                             <TableCell>
                               <Badge
@@ -1229,8 +1603,8 @@ export default function DashboardPage() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-500">
+                  <div className="flex flex-col md:flex-row items-center justify-between mt-4 space-y-2 md:space-y-0">
+                    <div className="text-xs md:text-sm text-gray-500">
                       Showing{" "}
                       {(currentPage - 1) *
                         (currentView === "logs"
@@ -1253,15 +1627,16 @@ export default function DashboardPage() {
                         : filteredEmailLogs.length}{" "}
                       results
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-1 md:space-x-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => setCurrentPage(currentPage - 1)}
                         disabled={currentPage === 1}
+                        className="text-xs md:text-sm px-2 md:px-3"
                       >
-                        <ChevronLeft className="h-4 w-4" />
-                        Previous
+                        <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
+                        <span className="hidden sm:inline">Previous</span>
                       </Button>
 
                       <div className="flex items-center space-x-1">
@@ -1289,7 +1664,7 @@ export default function DashboardPage() {
                                 }
                                 size="sm"
                                 onClick={() => setCurrentPage(pageNum)}
-                                className="w-8 h-8 p-0"
+                                className="w-6 h-6 md:w-8 md:h-8 p-0 text-xs md:text-sm"
                               >
                                 {pageNum}
                               </Button>
@@ -1303,9 +1678,10 @@ export default function DashboardPage() {
                         size="sm"
                         onClick={() => setCurrentPage(currentPage + 1)}
                         disabled={currentPage === totalPages}
+                        className="text-xs md:text-sm px-2 md:px-3"
                       >
-                        Next
-                        <ChevronRight className="h-4 w-4" />
+                        <span className="hidden sm:inline">Next</span>
+                        <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
                       </Button>
                     </div>
                   </div>
