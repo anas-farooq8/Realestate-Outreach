@@ -36,7 +36,7 @@ async function processPropertiesAsync(
   const failedProperties: string[] = [];
 
   // Smaller batch size for serverless environment to avoid connection limits
-  const batchSize = 10;
+  const batchSize = 1;
 
   // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
@@ -142,9 +142,6 @@ async function processPropertiesAsync(
     console.log(
       `🚀 Starting serverless batch processing of ${properties.length} properties`
     );
-    console.log(
-      `📊 Batch size: ${batchSize} properties per batch (optimized for Vercel)`
-    );
 
     for (let i = 0; i < properties.length; i += batchSize) {
       const batch = properties.slice(i, i + batchSize);
@@ -154,7 +151,6 @@ async function processPropertiesAsync(
       console.log(
         `\n🔄 Processing batch ${batchNumber}/${totalBatches}: ${batch.length} properties`
       );
-      console.log(`Properties in this batch: ${batch.join(", ")}`);
 
       // Start batch processing timestamp
       const batchStartTime = Date.now();

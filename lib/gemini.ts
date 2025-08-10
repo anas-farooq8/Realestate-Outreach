@@ -137,6 +137,8 @@ export async function extractNamesFromImage(
         error instanceof Error ? error.message : "Unknown error"
       }`
     );
+  } finally {
+    console.log("Name extraction completed");
   }
 }
 
@@ -328,12 +330,4 @@ export async function enrichPropertyData(
     );
     return {};
   }
-}
-
-/**
- * Utility function to estimate token usage (rough approximation)
- */
-export function estimateTokens(text: string): number {
-  // Rough estimation: ~4 characters per token for English text
-  return Math.ceil(text.length / 4);
 }
