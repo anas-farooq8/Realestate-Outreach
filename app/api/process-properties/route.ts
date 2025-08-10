@@ -21,7 +21,7 @@ async function processPropertiesAsync(
   const failedProperties: string[] = [];
 
   // Optimized batch size for better performance
-  const batchSize = 10;
+  const batchSize = 50;
 
   // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
@@ -167,10 +167,10 @@ async function processPropertiesAsync(
         )}%)`
       );
 
-      // Wait 2 seconds between batches (if not the last batch)
+      // Wait 5 seconds between batches (if not the last batch)
       if (i + batchSize < properties.length) {
-        console.log(`⏸️ Waiting 2 seconds before next batch...`);
-        await delay(2000);
+        console.log(`⏸️ Waiting 5 seconds before next batch...`);
+        await delay(5000);
       }
     }
 

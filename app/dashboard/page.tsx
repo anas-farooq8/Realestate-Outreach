@@ -102,6 +102,7 @@ export default function DashboardPage() {
     campaignWeek: "all",
     replyStatus: "all",
     template: "all",
+    emailExists: "all", // New filter for email exists
     createdAtSort: "desc", // Default to newest first for properties
     emailLogSort: "sent_at", // Sort field for email logs
     emailLogSortDirection: "desc", // Sort direction for email logs
@@ -243,6 +244,16 @@ export default function DashboardPage() {
       });
     }
 
+    // Apply email exists filter
+    if (filters.emailExists !== "all") {
+      filteredProps = filteredProps.filter((property) => {
+        const hasEmail =
+          property.decision_maker_email &&
+          property.decision_maker_email.trim() !== "";
+        return filters.emailExists === "exists" ? hasEmail : !hasEmail;
+      });
+    }
+
     // Apply email-specific filters
     if (filters.campaignWeek !== "all") {
       filteredLogs = filteredLogs.filter(
@@ -346,6 +357,7 @@ export default function DashboardPage() {
       campaignWeek: "all",
       replyStatus: "all",
       template: "all",
+      emailExists: "all", // Reset to default
       createdAtSort: "desc", // Reset to default
       emailLogSort: "sent_at", // Reset to default
       emailLogSortDirection: "desc", // Reset to default
@@ -870,25 +882,45 @@ export default function DashboardPage() {
 
                 {/* Property-specific filters - Mobile */}
                 {currentView === "properties" && (
-                  <div className="space-y-1">
-                    <Label className="text-xs">Status:</Label>
-                    <Select
-                      value={filters.subscriptionStatus}
-                      onValueChange={(value) =>
-                        setFilters({ ...filters, subscriptionStatus: value })
-                      }
-                    >
-                      <SelectTrigger className="h-8 text-xs">
-                        <SelectValue placeholder="All" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        <SelectItem value="subscribed">Subscribed</SelectItem>
-                        <SelectItem value="unsubscribed">
-                          Unsubscribed
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Email:</Label>
+                      <Select
+                        value={filters.emailExists}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, emailExists: value })
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="exists">Has Email</SelectItem>
+                          <SelectItem value="missing">No Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Status:</Label>
+                      <Select
+                        value={filters.subscriptionStatus}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, subscriptionStatus: value })
+                        }
+                      >
+                        <SelectTrigger className="h-8 text-xs">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="subscribed">Subscribed</SelectItem>
+                          <SelectItem value="unsubscribed">
+                            Unsubscribed
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                 )}
 
@@ -1061,8 +1093,32 @@ export default function DashboardPage() {
 
                 {/* Property-specific filters - only show when viewing properties */}
                 {currentView === "properties" && (
+                  <>
                   <div className="flex items-center space-x-2">
-                    <Label className="text-sm whitespace-nowrap">Status:</Label>
+                      <Label className="text-sm whitespace-nowrap">
+                        Email:
+                      </Label>
+                      <Select
+                        value={filters.emailExists}
+                        onValueChange={(value) =>
+                          setFilters({ ...filters, emailExists: value })
+                        }
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue placeholder="All" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All</SelectItem>
+                          <SelectItem value="exists">Has Email</SelectItem>
+                          <SelectItem value="missing">No Email</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Label className="text-sm whitespace-nowrap">
+                        Status:
+                      </Label>
                     <Select
                       value={filters.subscriptionStatus}
                       onValueChange={(value) =>
@@ -1081,6 +1137,7 @@ export default function DashboardPage() {
                       </SelectContent>
                     </Select>
                   </div>
+                  </>
                 )}
 
                 {/* Email-specific filters - only show when viewing logs */}
@@ -1193,7 +1250,7 @@ export default function DashboardPage() {
               {/* Email logs sort controls */}
               {currentView === "logs" && (
                 <div className="pt-3 md:pt-4 border-t border-gray-200">
-                  <div className="flex flex-wrap items-center gap-2 md:space-x-4">
+                  <div className="flex flex-wrap items-center gap-1 md:space-x-1">
                     <Label className="text-xs md:text-sm font-medium text-gray-700">
                       Sort by:
                     </Label>
@@ -1465,39 +1522,57 @@ export default function DashboardPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Property Address</TableHead>
-                          <TableHead>HOA/Management</TableHead>
-                          <TableHead>Decision Maker</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Phone</TableHead>
-                          <TableHead>State</TableHead>
-                          <TableHead>County</TableHead>
-                          <TableHead>City</TableHead>
-                          <TableHead>Zip</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Created</TableHead>
+                          <TableHead className="min-w-[250px]">
+                            Property Address
+                          </TableHead>
+                          <TableHead className="min-w-[200px]">
+                            HOA/Management
+                          </TableHead>
+                          <TableHead className="min-w-[150px]">
+                            Decision Maker
+                          </TableHead>
+                          <TableHead className="min-w-[200px]">Email</TableHead>
+                          <TableHead className="min-w-[120px]">Phone</TableHead>
+                          <TableHead className="min-w-[80px]">State</TableHead>
+                          <TableHead className="min-w-[120px]">
+                            County
+                          </TableHead>
+                          <TableHead className="min-w-[120px]">City</TableHead>
+                          <TableHead className="min-w-[80px]">Zip</TableHead>
+                          <TableHead className="min-w-[120px]">
+                            Status
+                          </TableHead>
+                          <TableHead className="min-w-[100px]">
+                            Created
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {(paginatedItems as Property[]).map((property) => (
                           <TableRow key={property.id}>
-                            <TableCell className="font-medium max-w-xs truncate">
+                            <TableCell className="font-medium min-w-[250px]">
+                              <div className="max-w-[250px] break-words">
                               {property.property_address || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell className="max-w-xs truncate">
+                            <TableCell className="min-w-[200px]">
+                              <div className="max-w-[200px] break-words">
                               {property.hoa_or_management_company || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[150px]">
+                              <div className="max-w-[150px] break-words">
                               {property.decision_maker_name || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[200px]">
                               {property.decision_maker_email &&
                               !property.decision_maker_email.includes(
                                 "noemail"
                               ) ? (
                                 <a
                                   href={`mailto:${property.decision_maker_email}`}
-                                  className="text-blue-600 hover:underline truncate block max-w-xs"
+                                  className="text-blue-600 hover:underline break-words max-w-[200px] block"
                                 >
                                   {property.decision_maker_email}
                                 </a>
@@ -1505,14 +1580,24 @@ export default function DashboardPage() {
                                 "—"
                               )}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[120px]">
+                              <div className="max-w-[120px] break-words">
                               {property.decision_maker_phone || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>{property.state || "—"}</TableCell>
-                            <TableCell>{property.county || "—"}</TableCell>
-                            <TableCell>{property.city || "—"}</TableCell>
-                            <TableCell>{property.zip_code || "—"}</TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[80px]">
+                              {property.state || "—"}
+                            </TableCell>
+                            <TableCell className="min-w-[120px]">
+                              {property.county || "—"}
+                            </TableCell>
+                            <TableCell className="min-w-[120px]">
+                              {property.city || "—"}
+                            </TableCell>
+                            <TableCell className="min-w-[80px]">
+                              {property.zip_code || "—"}
+                            </TableCell>
+                            <TableCell className="min-w-[120px]">
                               <Badge
                                 variant={
                                   property.suspend_until &&
@@ -1527,7 +1612,7 @@ export default function DashboardPage() {
                                   : "Unsubscribed"}
                               </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[100px]">
                               {new Date(
                                 property.created_at
                               ).toLocaleDateString()}
@@ -1540,30 +1625,48 @@ export default function DashboardPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Property Address</TableHead>
-                          <TableHead>Decision Maker</TableHead>
-                          <TableHead>Email</TableHead>
-                          <TableHead>Template Name</TableHead>
-                          <TableHead>Campaign Week</TableHead>
-                          <TableHead>Sent At</TableHead>
-                          <TableHead>Replied At</TableHead>
-                          <TableHead>Reply Status</TableHead>
+                          <TableHead className="min-w-[250px]">
+                            Property Address
+                          </TableHead>
+                          <TableHead className="min-w-[150px]">
+                            Decision Maker
+                          </TableHead>
+                          <TableHead className="min-w-[200px]">Email</TableHead>
+                          <TableHead className="min-w-[180px]">
+                            Template Name
+                          </TableHead>
+                          <TableHead className="min-w-[120px]">
+                            Campaign Week
+                          </TableHead>
+                          <TableHead className="min-w-[120px]">
+                            Sent At
+                          </TableHead>
+                          <TableHead className="min-w-[120px]">
+                            Replied At
+                          </TableHead>
+                          <TableHead className="min-w-[100px]">
+                            Reply Status
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {(paginatedItems as EmailLog[]).map((log) => (
                           <TableRow key={log.id}>
-                            <TableCell className="font-medium max-w-xs truncate">
+                            <TableCell className="font-medium min-w-[250px]">
+                              <div className="max-w-[250px] break-words">
                               {log.properties?.property_address || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[150px]">
+                              <div className="max-w-[150px] break-words">
                               {log.properties?.decision_maker_name || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[200px]">
                               {log.properties?.decision_maker_email ? (
                                 <a
                                   href={`mailto:${log.properties.decision_maker_email}`}
-                                  className="text-blue-600 hover:underline truncate block max-w-xs"
+                                  className="text-blue-600 hover:underline break-words max-w-[200px] block"
                                 >
                                   {log.properties.decision_maker_email}
                                 </a>
@@ -1571,23 +1674,25 @@ export default function DashboardPage() {
                                 "—"
                               )}
                             </TableCell>
-                            <TableCell className="max-w-xs truncate">
+                            <TableCell className="min-w-[180px]">
+                              <div className="max-w-[180px] break-words">
                               {log.email_templates?.template_name || "—"}
+                              </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[120px]">
                               <Badge variant="outline">
                                 Week {log.campaign_week}
                               </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[120px]">
                               {new Date(log.sent_at).toLocaleDateString()}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[120px]">
                               {log.replied_at
                                 ? new Date(log.replied_at).toLocaleDateString()
                                 : "—"}
                             </TableCell>
-                            <TableCell>
+                            <TableCell className="min-w-[100px]">
                               <Badge
                                 variant={log.replied ? "default" : "secondary"}
                               >
