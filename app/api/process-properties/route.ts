@@ -134,7 +134,6 @@ async function processPropertiesAsync(
     console.log(
       `🚀 Starting large batch processing of ${properties.length} properties`
     );
-    console.log(`📊 Batch size: ${batchSize} simultaneous requests per batch`);
 
     for (let i = 0; i < properties.length; i += batchSize) {
       const batch = properties.slice(i, i + batchSize);

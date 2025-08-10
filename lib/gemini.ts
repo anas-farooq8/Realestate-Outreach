@@ -260,12 +260,6 @@ export async function enrichPropertyData(
         }
       }
 
-      console.log(
-        `✅ [Attempt ${
-          retryCount + 1
-        }] Successfully enriched data for ${propertyName}:`,
-        validData
-      );
       return validData;
     } catch (parseError) {
       console.error(
