@@ -20,8 +20,8 @@ async function processPropertiesAsync(
   const skippedProperties: string[] = [];
   const failedProperties: string[] = [];
 
-  // Large batch size for parallel processing
-  const batchSize = 50;
+  // Optimized batch size for better performance
+  const batchSize = 10;
 
   // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
@@ -69,14 +69,6 @@ async function processPropertiesAsync(
         propertyName,
         parentAddress
       );
-
-      // Increment request count after successful Gemini API call
-      const incrementSuccess = await incrementProcessPropertiesRequests(1);
-      if (!incrementSuccess) {
-        console.warn(
-          `Failed to increment process properties request count for ${propertyName}`
-        );
-      }
 
       // Create individual client for insertion
       const supabase = await createClient();
@@ -152,6 +144,18 @@ async function processPropertiesAsync(
       processedCount += successfulInBatch;
       skippedCount += skippedInBatch;
 
+      // Update request count for successful Gemini API calls in this batch
+      if (successfulInBatch > 0) {
+        const incrementSuccess = await incrementProcessPropertiesRequests(
+          successfulInBatch
+        );
+        if (!incrementSuccess) {
+          console.warn(
+            `Failed to increment request count for batch ${batchNumber}`
+          );
+        }
+      }
+
       console.log(
         `✅ Batch ${batchNumber} completed in ${batchTime}s - Processed: ${successfulInBatch}, Skipped: ${skippedInBatch}, Failed: ${failedInBatch}`
       );
@@ -163,10 +167,10 @@ async function processPropertiesAsync(
         )}%)`
       );
 
-      // Wait 5 seconds between batches (if not the last batch)
+      // Wait 2 seconds between batches (if not the last batch)
       if (i + batchSize < properties.length) {
-        console.log(`⏸️ Waiting 5 seconds before next batch...`);
-        await delay(5000);
+        console.log(`⏸️ Waiting 2 seconds before next batch...`);
+        await delay(2000);
       }
     }
 
