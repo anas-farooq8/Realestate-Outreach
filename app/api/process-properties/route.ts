@@ -89,7 +89,6 @@ async function processPropertiesAsync(
         failedProperties.push(propertyName);
         return "failed";
       } else {
-        console.log(`✅ Successfully processed: ${propertyName}`);
         return "processed";
       }
     } catch (error) {
@@ -153,8 +152,8 @@ async function processPropertiesAsync(
 
       // Wait 10 seconds between batches (if not the last batch)
       if (i + batchSize < properties.length) {
-        console.log(`⏸️ Waiting 10 seconds before next batch...`);
-        await delay(10000);
+        console.log(`⏸️ Waiting 5 seconds before next batch...`);
+        await delay(5000);
       }
     }
 
@@ -176,8 +175,6 @@ async function processPropertiesAsync(
       skippedCount,
       skippedProperties
     );
-
-    console.log(`📧 Completion email sent to ${userEmail}`);
   } catch (error) {
     console.error("💥 Error in processing:", error);
 

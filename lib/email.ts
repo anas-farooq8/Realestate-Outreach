@@ -76,7 +76,7 @@ export async function sendCompletionEmail(
     const result = await sendEmail(userEmail, subject, html);
 
     if (result.success) {
-      console.log("Completion email sent successfully to:", userEmail);
+      console.log("📧 Completion email sent successfully to:", userEmail);
     } else {
       console.error("Failed to send completion email:", result.error);
     }

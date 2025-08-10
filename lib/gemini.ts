@@ -129,7 +129,7 @@ export async function enrichPropertyData(
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       // Temporarily remove tools to test basic connectivity
-      // tools: [{ googleSearch: {} } as any],
+      tools: [{ googleSearch: {} } as any],
       generationConfig: {
         temperature: 0.5, // Low temperature for factual data
         topK: 40,
