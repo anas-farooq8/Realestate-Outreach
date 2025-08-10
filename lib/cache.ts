@@ -11,19 +11,22 @@ import type {
 
 /**
  * Utility function to generate Supabase bucket URL from environment variables
+ * This eliminates the need for NEXT_PUBLIC_SUPABASE_BUCKET_URL
  */
 export function getBucketUrl(): string {
-  const bucketName = process.env.SUPABASE_BUCKET_NAME;
+  const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
   if (!bucketName) {
-    throw new Error("SUPABASE_BUCKET_NAME environment variable is not set");
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+    );
   }
 
-  const projectUrl = process.env.SUPABASE_URL;
+  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!projectUrl) {
-    throw new Error("SUPABASE_URL environment variable is not set");
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is not set");
   }
 
-  // Extract project ID from URL
+  // Extract project ID from URL (e.g., https://wiwxjzggfwkiqekkjtev.supabase.co)
   const projectId = projectUrl
     .replace("https://", "")
     .replace(".supabase.co", "");
@@ -61,9 +64,8 @@ class DataCache {
 
   // Service role client for storage operations (bypasses RLS)
   private storageClient = createServiceRoleClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY!
   );
 
   // Helper function to generate bucket URL from project URL and bucket name
@@ -521,9 +523,11 @@ class DataCache {
   }
 
   private async fetchPdfProposalsFromStorage(): Promise<PDFProposal[]> {
-    const bucketName = process.env.SUPABASE_BUCKET_NAME;
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
     if (!bucketName) {
-      throw new Error("SUPABASE_BUCKET_NAME environment variable is not set");
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
     }
 
     const bucketBaseUrl = this.getBucketUrl();
@@ -729,9 +733,11 @@ class DataCache {
       throw new Error("User not authenticated");
     }
 
-    const bucketName = process.env.SUPABASE_BUCKET_NAME;
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
     if (!bucketName) {
-      throw new Error("SUPABASE_BUCKET_NAME environment variable is not set");
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
     }
 
     // Sanitize the filename to remove emojis and invalid characters
@@ -784,9 +790,11 @@ class DataCache {
       throw new Error("User not authenticated");
     }
 
-    const bucketName = process.env.SUPABASE_BUCKET_NAME;
+    const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
     if (!bucketName) {
-      throw new Error("SUPABASE_BUCKET_NAME environment variable is not set");
+      throw new Error(
+        "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+      );
     }
 
     // First check if the file exists
