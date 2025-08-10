@@ -137,24 +137,38 @@ export async function enrichPropertyData(
       },
     });
 
-    const searchQuery = `"${propertyName}" property management HOA contact "${parentAddress}"`;
-
     const prompt = `
-      You are a real estate data enrichment specialist. Find information about "${propertyName}" located near "${parentAddress}".
-
-      Please provide any available information in the following JSON format:
+      You are an expert in real estate property management research. Search the internet.
+      I will provide you with the name of a residential community or a sample address located in "${parentAddress}"
+      (which might includes multiple cities).
+      Your task is to:
+      Identify the Homeowners Association (HOA) or Property Management Company that manages the community.
+      Provide the full name, email address, and phone number of the primary contact
+      (ideally the property manager, community association manager, or decision-maker responsible for amenity services).
+      Confirm whether the management is done by a third-party company or by an internal HOA office.
+      Include the full mailing address of the HOA or management company, broken down into street, city, state, and zip code.
+      Focus specifically on who makes amenity-related decisions because my company offers mobile massage services to residential communities.
+      Output the results strictly as JSON with the following keys:
       {
         "management_company": "Company name if found",
         "decision_maker_name": "Contact person name if found",
         "email": "Email if found",
         "phone": "Phone if found", 
-        "city": "City name if found",
-        "county": "County name if found",
-        "state": "State name if found",
-        "zip_code": "ZIP code if found"
+        "state": "State name if found (Full State Name, don't write in abbreviation)",
+        "county": "County name if found" (County Name Only, don't attach 'county' to the end),
+        "city": "City name if found" (City Name Only),
+        "zip_code": "ZIP code if found (Number only)"
       }
 
-      Only include fields where you have information. Return ONLY the JSON object.
+      Important:
+      - If exact information is not available, return the closest verified contact info (management company and general email/phone).
+      - Remember email search should be given priority.
+      - Do not include unrelated businesses or generic city government contacts.
+      - Do not add any explanation or text outside the JSON.
+      - Only include fields where you have information.
+      - Return ONLY the JSON object.
+
+      Property Name: ${propertyName}
     `;
 
     const result = await model.generateContent(prompt);
