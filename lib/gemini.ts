@@ -160,9 +160,43 @@ export async function enrichPropertyData(
       }] Enriching data for property: ${propertyName} near ${parentAddress}`
     );
 
+    // Test basic Gemini connectivity on first attempt
+    if (retryCount === 0) {
+      console.log(`🧪 Testing Gemini API connectivity...`);
+      try {
+        const testModel = genAI.getGenerativeModel({
+          model: "gemini-2.5-flash",
+        });
+        const testResult = (await Promise.race([
+          testModel.generateContent(
+            'Say \'Hello\' in JSON format: {"message": "Hello"}'
+          ),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Test timeout")), 5000)
+          ),
+        ])) as any;
+        const testResponse = await testResult.response;
+        const testText = testResponse.text();
+        console.log(
+          `✅ Gemini API connectivity test passed: ${testText.substring(
+            0,
+            100
+          )}`
+        );
+      } catch (testError) {
+        console.error(`❌ Gemini API connectivity test failed:`, testError);
+        throw new Error(
+          `Gemini API connectivity test failed: ${
+            testError instanceof Error ? testError.message : "Unknown error"
+          }`
+        );
+      }
+    }
+
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      tools: [{ googleSearch: {} } as any],
+      // Temporarily remove tools to test basic connectivity
+      // tools: [{ googleSearch: {} } as any],
       generationConfig: {
         temperature: 0.5, // Low temperature for factual data
         topK: 40,
@@ -210,9 +244,33 @@ export async function enrichPropertyData(
       Return ONLY the JSON object with verified data. No additional text or explanations.
     `;
 
-    const result = await model.generateContent(prompt);
+    console.log(`🌐 Making Gemini API call for ${propertyName}...`);
+
+    // Create timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(`Gemini API timeout after 20 seconds for ${propertyName}`)
+        );
+      }, 20000); // 20 second timeout
+    });
+
+    // Race the API call against timeout
+    const result = (await Promise.race([
+      model.generateContent(prompt),
+      timeoutPromise,
+    ])) as any;
+
+    console.log(
+      `✅ Gemini API call completed for ${propertyName}, processing response...`
+    );
+
     const response = await result.response;
     const text = response.text();
+
+    console.log(
+      `📝 Raw Gemini response for ${propertyName}: ${text.substring(0, 200)}...`
+    );
 
     // Clean the response
     let cleanedText = text
@@ -261,6 +319,12 @@ export async function enrichPropertyData(
         }
       }
 
+      console.log(
+        `✅ [Attempt ${
+          retryCount + 1
+        }] Successfully enriched data for ${propertyName}:`,
+        validData
+      );
       return validData;
     } catch (parseError) {
       console.error(
@@ -298,12 +362,18 @@ export async function enrichPropertyData(
 
     // Log specific error types for debugging
     if (error instanceof Error) {
-      if (error.message.includes("quota")) {
+      if (error.message.includes("timeout")) {
         console.error(
-          "Rate limit exceeded - this shouldn't happen with large batches"
+          `⏰ Timeout occurred for ${propertyName} - Gemini API took too long`
         );
+      } else if (error.message.includes("quota")) {
+        console.error(`🚫 Rate limit exceeded for ${propertyName}`);
       } else if (error.message.includes("authentication")) {
-        console.error("API key authentication failed");
+        console.error(`🔑 API key authentication failed for ${propertyName}`);
+      } else if (error.message.includes("fetch")) {
+        console.error(`🌐 Network error for ${propertyName}`);
+      } else {
+        console.error(`🔍 Unknown error for ${propertyName}: ${error.message}`);
       }
     }
 
