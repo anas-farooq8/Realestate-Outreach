@@ -9,6 +9,30 @@ import type {
   PDFProposal,
 } from "@/lib/types";
 
+/**
+ * Utility function to generate Supabase bucket URL from environment variables
+ */
+export function getBucketUrl(): string {
+  const bucketName = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_NAME;
+  if (!bucketName) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_BUCKET_NAME environment variable is not set"
+    );
+  }
+
+  const projectUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!projectUrl) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is not set");
+  }
+
+  // Extract project ID from URL
+  const projectId = projectUrl
+    .replace("https://", "")
+    .replace(".supabase.co", "");
+
+  return `https://${projectId}.supabase.co/storage/v1/object/public/${bucketName}`;
+}
+
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -42,6 +66,11 @@ class DataCache {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_SERVICE_KEY!
   );
+
+  // Helper function to generate bucket URL from project URL and bucket name
+  private getBucketUrl(): string {
+    return getBucketUrl();
+  }
 
   // Auth state for hooks and UI - no user caching, only root user status caching
   private isAuthInitialized = false;
@@ -500,7 +529,7 @@ class DataCache {
       );
     }
 
-    const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+    const bucketBaseUrl = this.getBucketUrl();
 
     const { data: files, error } = await this.storageClient.storage
       .from(bucketName)
@@ -807,14 +836,7 @@ class DataCache {
 
   // View PDF method - returns the public URL for viewing
   async viewPdfProposal(fileName: string): Promise<string> {
-    const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
-
-    if (!bucketBaseUrl) {
-      throw new Error(
-        "NEXT_PUBLIC_SUPABASE_BUCKET_URL environment variable is not set"
-      );
-    }
-
+    const bucketBaseUrl = this.getBucketUrl();
     const publicUrl = `${bucketBaseUrl}/${encodeURIComponent(fileName)}`;
     return publicUrl;
   }
@@ -1117,7 +1139,7 @@ class DataCache {
           `🔄 [PDF CACHE ADD] Valid cache found, adding PDF proposal`
         );
 
-        const bucketBaseUrl = process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL;
+        const bucketBaseUrl = this.getBucketUrl();
 
         const newProposal: PDFProposal = {
           name: fileName,
@@ -1125,9 +1147,7 @@ class DataCache {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_accessed_at: new Date().toISOString(),
-          publicUrl: bucketBaseUrl
-            ? `${bucketBaseUrl}/${encodeURIComponent(fileName)}`
-            : undefined,
+          publicUrl: `${bucketBaseUrl}/${encodeURIComponent(fileName)}`,
           metadata: {
             eTag: "",
             mimetype: "application/pdf",

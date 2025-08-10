@@ -2,38 +2,64 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// Rate limiting
+// Enhanced delay function
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Extracts property/community names from an image using Gemini (no web search).
+ * ===============================================================================
+ * GEMINI AI UTILITY FUNCTIONS
+ * ===============================================================================
+ *
+ * This file contains individual AI functions for:
+ * 1. Image analysis (extractNamesFromImage) - Uses Gemini Pro
+ * 2. Property data enrichment (enrichPropertyData) - Uses Gemini Flash with web search
+ *
+ * ARCHITECTURE NOTE:
+ * - This file handles INDIVIDUAL AI requests only
+ * - Batch processing, database operations, and email notifications are handled
+ *   in the API routes (app/api/process-properties/route.ts)
+ * - This separation ensures clean separation of concerns:
+ *   * Gemini file = AI utilities
+ *   * API routes = Business logic, batching, database, notifications
+ * ===============================================================================
+ */
+
+/**
+ * Extracts property/community names from an image using Gemini Pro (no web search needed).
+ * Using Pro model for better accuracy with image analysis.
  */
 export async function extractNamesFromImage(
   imageBuffer: Buffer,
   mimeType: string
 ): Promise<string[]> {
   try {
-    console.log("Starting name extraction from image...");
+    console.log("Starting name extraction from image using Gemini Pro...");
 
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      model: "gemini-2.5-pro",
+      generationConfig: {
+        temperature: 0.5, // Lower temperature for more consistent extraction
+        topK: 40,
+        topP: 0.95,
+      },
     });
 
     const prompt = `
-      Analyze this image and extract ALL property/community names visible in the image.
+      You are an expert at analyzing real estate images. Carefully examine this image and extract ALL visible property/community names.
 
-      IMPORTANT RULES:
-      1. Extract ONLY the property/community name (e.g., "CHASEWOOD", "SUNSET VILLAGE")
-      2. Remove duplicates - each name should appear only once
-      3. Return names in UPPERCASE format
-      4. Do not include addresses, just the property names
-      5. If you see apartment complex names, HOA community names, or subdivision names, include them
-      6. Look for any text that represents a property or community name
+      EXTRACTION RULES:
+      1. Look for any text that represents a property, community, or subdivision name
+      2. Include HOA communities, apartment complexes, condominiums, townhomes, subdivisions
+      3. Extract the COMPLETE name as it appears (e.g., "CHASEWOOD APARTMENTS", "SUNSET VILLAGE HOA")
+      4. Return names in UPPERCASE format
+      5. Remove exact duplicates only
+      6. Do NOT include street addresses, just property/community names
+      7. Look carefully at signs, building facades, entrance markers, and any visible text
 
-      Return the names as a JSON array of strings.
-      Example: ["CHASEWOOD", "SUNSET VILLAGE", "OAKWOOD ESTATES"]
-
-      If no property names are found, return an empty array: []
+      IMPORTANT: Return ONLY a valid JSON array of strings, nothing else.
+      Example format: ["CHASEWOOD APARTMENTS", "SUNSET VILLAGE", "OAKWOOD ESTATES"]
+      
+      If no property names are visible, return: []
     `;
 
     const imagePart = {
@@ -47,14 +73,16 @@ export async function extractNamesFromImage(
     const response = await result.response;
     const text = response.text();
 
-    console.log("Raw Gemini response:", text);
-
+    // Clean and parse the response
     let cleanedText = text
       .trim()
       .replace(/```json\s*|\s*```/g, "")
-      .replace(/```\s*|\s*```/g, "");
+      .replace(/```\s*|\s*```/g, "")
+      .replace(/^[^[\{]*/, "") // Remove any text before JSON starts
+      .replace(/[^}\]]*$/, ""); // Remove any text after JSON ends
 
-    const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+    // Extract JSON array if embedded in text
+    const jsonMatch = cleanedText.match(/\[[\s\S]*?\]/);
     if (jsonMatch) cleanedText = jsonMatch[0];
 
     try {
@@ -62,36 +90,41 @@ export async function extractNamesFromImage(
       if (Array.isArray(names)) {
         const uniqueNames = [
           ...new Set(names.map((name) => String(name).trim().toUpperCase())),
-        ].filter((name) => name.length > 0);
+        ].filter((name) => name.length > 0 && name.length < 100); // Reasonable length filter
 
-        console.log("Extracted names:", uniqueNames);
         return uniqueNames;
       }
     } catch (parseError) {
       console.error(
-        "JSON parsing failed, trying to extract names manually:",
+        "JSON parsing failed, trying manual extraction:",
         parseError
       );
-      const lines = cleanedText.split("\n");
-      const extractedNames: string[] = [];
 
-      for (const line of lines) {
-        const trimmed = line
-          .trim()
-          .replace(/["[\],]/g, "")
-          .trim();
-        if (
-          trimmed &&
-          trimmed.length > 2 &&
-          !trimmed.toLowerCase().includes("no property")
-        ) {
-          extractedNames.push(trimmed.toUpperCase());
-        }
-      }
+      // Fallback: Manual extraction
+      const lines = text
+        .split(/[\n,]/)
+        .map((line) =>
+          line
+            .trim()
+            .replace(/["[\],{}]/g, "")
+            .replace(/^\d+\.?\s*/, "") // Remove numbering
+            .trim()
+        )
+        .filter(
+          (line) =>
+            line &&
+            line.length > 2 &&
+            line.length < 100 &&
+            !line.toLowerCase().includes("no property") &&
+            !line.toLowerCase().includes("not found") &&
+            !line.toLowerCase().includes("unable")
+        );
 
-      if (extractedNames.length > 0) {
-        const uniqueNames = [...new Set(extractedNames)];
-        console.log("Manually extracted names:", uniqueNames);
+      if (lines.length > 0) {
+        const uniqueNames = [
+          ...new Set(lines.map((name) => name.toUpperCase())),
+        ];
+        console.log("Parsed extracted names:", uniqueNames);
         return uniqueNames;
       }
     }
@@ -100,81 +133,214 @@ export async function extractNamesFromImage(
     return [];
   } catch (error) {
     console.error("Error extracting names from image:", error);
-    throw new Error("Failed to extract names from image");
+    throw new Error(
+      `Failed to extract names from image: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 }
 
 /**
- * Enriches property/community info using Google Search + Gemini (grounded).
+ * Enriches property/community info using Gemini Flash with Google Search.
+ * Using Flash model for cost efficiency with web search capabilities.
+ * Includes retry mechanism for failed requests.
  */
 export async function enrichPropertyData(
   propertyName: string,
-  parentAddress: string
+  parentAddress: string,
+  retryCount: number = 0,
+  maxRetries: number = 3
 ): Promise<Record<string, string>> {
   try {
-    console.log(`Enriching data for property: ${propertyName}`);
+    console.log(
+      `[Attempt ${retryCount + 1}/${
+        maxRetries + 1
+      }] Enriching data for property: ${propertyName} near ${parentAddress}`
+    );
 
     const model = genAI.getGenerativeModel({
-      model: process.env.GEMINI_MODEL || "gemini-2.5-flash",
+      model: "gemini-2.5-flash",
       tools: [{ googleSearch: {} } as any],
+      generationConfig: {
+        temperature: 0.5, // Low temperature for factual data
+        topK: 40,
+        topP: 0.95,
+      },
     });
 
+    const searchQuery = `"${propertyName}" property management HOA contact "${parentAddress}"`;
+
     const prompt = `
-      You are a real estate data enrichment expert. For the property "${propertyName}" located near "${parentAddress}", provide the following information in JSON format:
+      You are a real estate data enrichment specialist. Search for information about "${propertyName}" located near "${parentAddress}".
 
-      IMPORTANT FORMATTING RULES:
-      1. For state: Use full state name (e.g., "Florida", not "FL")
-      2. For county: Use only county name without "County" word (e.g., "Miami-Dade", not "Miami-Dade County")
-      3. If any data is not found or uncertain, omit that field entirely from the JSON
-      4. Do not use "unknown", "N/A", or similar placeholder values
-      5. Only include fields where you have confident data
+      SEARCH STRATEGY:
+      1. Search for: "${searchQuery}"
+      2. Look for official property websites, HOA sites, management company pages
+      3. Find current contact information and management details
 
-      Required JSON structure (only include fields with actual data):
+      DATA FORMATTING RULES:
+      1. State: Use FULL state name (e.g., "Florida", never "FL")
+      2. County: Use county name WITHOUT "County" suffix (e.g., "Miami-Dade", not "Miami-Dade County")
+      3. Phone: Format as standard US phone (e.g., "(555) 123-4567")
+      4. Email: Must be valid email format
+      5. ONLY include fields with VERIFIED data - omit uncertain fields entirely
+      6. Do NOT use placeholders like "unknown", "N/A", or similar
+
+      REQUIRED JSON OUTPUT (include only verified fields):
       {
-        "management_company": "Company name if found",
-        "decision_maker_name": "Name if found",
-        "email": "email@domain.com if found",
-        "phone": "phone number if found",
-        "city": "city name if found",
-        "county": "county name only (no 'County' word)",
-        "state": "full state name",
-        "zip_code": "zip code if found"
+        "management_company": "Verified company name",
+        "decision_maker_name": "Verified contact person name",
+        "email": "verified@email.com",
+        "phone": "(555) 123-4567",
+        "city": "Verified city name",
+        "county": "Verified county name without 'County'",
+        "state": "Full verified state name",
+        "zip_code": "Verified ZIP code"
       }
 
-      Focus on finding:
-      - HOA management companies or property management companies
-      - Decision makers (HOA presidents, property managers, etc.)
-      - Contact information (emails, phone numbers)
-      - Accurate location data
+      PRIORITY SEARCH TARGETS:
+      - Property management companies
+      - HOA management contacts
+      - Community association websites
+      - Official property directories
+      - Contact information for decision makers
 
-      Return only the JSON object, no additional text.
+      Return ONLY the JSON object with verified data. No additional text or explanations.
     `;
 
-    await delay(10000); // 10 seconds between requests
-
     const result = await model.generateContent(prompt);
-
     const response = await result.response;
     const text = response.text();
 
-    console.log(`Raw response for ${propertyName}:`, text);
-
+    // Clean the response
     let cleanedText = text
       .trim()
       .replace(/```json\s*|\s*```/g, "")
-      .replace(/```\s*|\s*```/g, "");
+      .replace(/```\s*|\s*```/g, "")
+      .replace(/^[^{]*/, "") // Remove text before JSON
+      .replace(/[^}]*$/, ""); // Remove text after JSON
+
+    // Extract JSON object
+    const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) cleanedText = jsonMatch[0];
 
     try {
       const enrichedData = JSON.parse(cleanedText);
-      console.log(`Enriched data for ${propertyName}:`, enrichedData);
-      return enrichedData;
+
+      // Validate the data structure
+      const validData: Record<string, string> = {};
+      const allowedFields = [
+        "management_company",
+        "decision_maker_name",
+        "email",
+        "phone",
+        "city",
+        "county",
+        "state",
+        "zip_code",
+      ];
+
+      for (const [key, value] of Object.entries(enrichedData)) {
+        if (
+          allowedFields.includes(key) &&
+          typeof value === "string" &&
+          value.trim()
+        ) {
+          const trimmedValue = value.trim();
+          // Skip placeholder values
+          if (
+            !trimmedValue.toLowerCase().includes("unknown") &&
+            !trimmedValue.toLowerCase().includes("n/a") &&
+            !trimmedValue.toLowerCase().includes("not found") &&
+            !trimmedValue.toLowerCase().includes("verify")
+          ) {
+            validData[key] = trimmedValue;
+          }
+        }
+      }
+
+      console.log(
+        `✅ [Attempt ${
+          retryCount + 1
+        }] Successfully enriched data for ${propertyName}:`,
+        validData
+      );
+      return validData;
     } catch (parseError) {
-      console.error(`JSON parsing failed for ${propertyName}:`, parseError);
-      console.log("Raw text that failed to parse:", cleanedText);
+      console.error(
+        `❌ [Attempt ${
+          retryCount + 1
+        }] JSON parsing failed for ${propertyName}:`,
+        parseError
+      );
+
+      // Retry if we haven't exceeded max retries
+      if (retryCount < maxRetries) {
+        console.log(
+          `🔄 Retrying ${propertyName} (attempt ${retryCount + 2}/${
+            maxRetries + 1
+          })...`
+        );
+        await delay(1000); // Wait 1 second before retry
+        return enrichPropertyData(
+          propertyName,
+          parentAddress,
+          retryCount + 1,
+          maxRetries
+        );
+      }
+
       return {};
     }
   } catch (error) {
-    console.error("Error enriching property data:", error);
+    console.error(
+      `❌ [Attempt ${
+        retryCount + 1
+      }] Error enriching property data for ${propertyName}:`,
+      error
+    );
+
+    // Log specific error types for debugging
+    if (error instanceof Error) {
+      if (error.message.includes("quota")) {
+        console.error(
+          "Rate limit exceeded - this shouldn't happen with large batches"
+        );
+      } else if (error.message.includes("authentication")) {
+        console.error("API key authentication failed");
+      }
+    }
+
+    // Retry if we haven't exceeded max retries
+    if (retryCount < maxRetries) {
+      console.log(
+        `🔄 Retrying ${propertyName} due to error (attempt ${retryCount + 2}/${
+          maxRetries + 1
+        })...`
+      );
+      await delay(2000); // Wait 2 seconds before retry on error
+      return enrichPropertyData(
+        propertyName,
+        parentAddress,
+        retryCount + 1,
+        maxRetries
+      );
+    }
+
+    console.error(
+      `💥 [Final attempt] Failed to enrich ${propertyName} after ${
+        maxRetries + 1
+      } attempts`
+    );
     return {};
   }
+}
+
+/**
+ * Utility function to estimate token usage (rough approximation)
+ */
+export function estimateTokens(text: string): number {
+  // Rough estimation: ~4 characters per token for English text
+  return Math.ceil(text.length / 4);
 }

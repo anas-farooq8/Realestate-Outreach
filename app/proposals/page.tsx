@@ -64,6 +64,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useCachedPdfProposals } from "@/hooks/use-cached-data";
 import type { PDFProposal } from "@/lib/types";
+import { dataCache } from "@/lib/cache";
+import { getBucketUrl } from "@/lib/cache";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -126,7 +128,6 @@ export default function ProposalsPage() {
   useEffect(() => {
     const loadSelectedPdf = async () => {
       try {
-        const { dataCache } = await import("@/lib/cache");
         const currentPdfUrl = await dataCache.getSelectedPdfUrl();
         setSelectedPdfUrl(currentPdfUrl);
       } catch (error) {
@@ -168,7 +169,6 @@ export default function ProposalsPage() {
 
     setUploadingPdf(true);
     try {
-      const { dataCache } = await import("@/lib/cache");
       // Upload PDF and get the actual file name (which might be different if duplicate)
       const result = await dataCache.uploadPdfProposal(file);
 
@@ -179,11 +179,9 @@ export default function ProposalsPage() {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         last_accessed_at: new Date().toISOString(),
-        publicUrl: process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL
-          ? `${
-              process.env.NEXT_PUBLIC_SUPABASE_BUCKET_URL
-            }/${encodeURIComponent(result.actualFileName)}`
-          : undefined,
+        publicUrl: `${getBucketUrl()}/${encodeURIComponent(
+          result.actualFileName
+        )}`,
         metadata: {
           eTag: "",
           mimetype: "application/pdf",
@@ -235,7 +233,6 @@ export default function ProposalsPage() {
 
   const handleDeletePdf = async (fileName: string) => {
     try {
-      const { dataCache } = await import("@/lib/cache");
       // Delete from storage first
       await dataCache.deletePdfProposal(fileName);
 
@@ -286,7 +283,6 @@ export default function ProposalsPage() {
 
     setSelectingPdf(true);
     try {
-      const { dataCache } = await import("@/lib/cache");
       await dataCache.updateSelectedPdf(pdf.publicUrl);
       setSelectedPdfUrl(pdf.publicUrl);
 
