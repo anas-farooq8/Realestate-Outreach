@@ -2,7 +2,6 @@
 
 import type React from "react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useRequestStats } from "@/hooks/use-request-stats";
 import {
   ImageIcon,
   Trash2,
@@ -30,6 +31,9 @@ import {
   X,
   Plus,
   RefreshCw,
+  AlertTriangle,
+  Clock,
+  Zap,
 } from "lucide-react";
 import type { ExtractedProperty } from "@/lib/types";
 
@@ -46,7 +50,44 @@ export default function UploadPage() {
   const [editingValue, setEditingValue] = useState("");
 
   const { toast } = useToast();
-  const router = useRouter();
+  const {
+    stats,
+    loading: statsLoading,
+    error: statsError,
+    refresh: refreshStats,
+  } = useRequestStats();
+
+  // Helper function to format reset time in user's local timezone
+  const formatResetTime = (resetTime: string) => {
+    const resetDate = new Date(resetTime);
+    const now = new Date();
+    const timeDiff = resetDate.getTime() - now.getTime();
+
+    // If already past reset time, show "soon"
+    if (timeDiff <= 0) {
+      return "soon";
+    }
+
+    const hours = Math.floor(timeDiff / (1000 * 60 * 60));
+    const minutes = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60));
+
+    // Format local time
+    const localResetTime = resetDate.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    // Create countdown text
+    let countdown = "";
+    if (hours > 0) {
+      countdown = `${hours}h ${minutes}m`;
+    } else {
+      countdown = `${minutes}m`;
+    }
+
+    return `${countdown} (${localResetTime})`;
+  };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -94,6 +135,20 @@ export default function UploadPage() {
       return;
     }
 
+    // Check if processing limit is reached (this disables extract functionality too)
+    if (stats && !stats.canMakeRequests) {
+      toast({
+        title: "Processing Limit Reached",
+        description: `Property processing limit reached (${
+          stats.limit
+        } requests). New extractions are disabled until limit resets in ${formatResetTime(
+          stats.resetTime
+        )}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsExtracting(true);
     try {
       const formData = new FormData();
@@ -121,6 +176,7 @@ export default function UploadPage() {
           title: "Success",
           description: `Extracted ${properties.length} property names`,
         });
+        refreshStats(); // Refresh stats to show updated usage
       } else {
         toast({
           title: "No Names Found",
@@ -211,6 +267,19 @@ export default function UploadPage() {
       return;
     }
 
+    // Check if we have enough remaining processing requests for all properties
+    const requestsNeeded = extractedProperties.length;
+    if (stats && stats.remaining < requestsNeeded) {
+      toast({
+        title: "Insufficient Processing Requests",
+        description: `Processing ${requestsNeeded} properties requires ${requestsNeeded} requests, but you only have ${
+          stats.remaining
+        } remaining. Limit resets in ${formatResetTime(stats.resetTime)}.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const propertyNames = extractedProperties.map((p) => p.name);
@@ -230,6 +299,15 @@ export default function UploadPage() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 429) {
+          toast({
+            title: "Processing Limit Exceeded",
+            description: data.details || "Property processing limit reached",
+            variant: "destructive",
+          });
+          refreshStats(); // Refresh stats to show updated usage
+          return;
+        }
         throw new Error(data.error || "Failed to start processing");
       }
 
@@ -252,6 +330,9 @@ export default function UploadPage() {
       if (fileInput) {
         fileInput.value = "";
       }
+
+      // Refresh stats to show updated usage
+      refreshStats();
     } catch (error) {
       console.error("Error processing properties:", error);
       toast({
@@ -278,6 +359,95 @@ export default function UploadPage() {
             contact information
           </p>
         </div>
+
+        {/* Request Usage Statistics */}
+        <Card>
+          <CardContent className="pt-6">
+            {statsLoading ? (
+              <div className="flex items-center space-x-2 text-gray-600">
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Loading request statistics...</span>
+              </div>
+            ) : statsError ? (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  Failed to load request statistics: {statsError}
+                </AlertDescription>
+              </Alert>
+            ) : stats ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <Zap className="h-5 w-5 text-blue-600" />
+                    <h3 className="font-semibold text-gray-900">
+                      Daily Property Processing Usage
+                    </h3>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={refreshStats}
+                    className="h-8 w-8 p-0"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Processing Requests Used</span>
+                    <span className="font-medium">
+                      {stats.used} / {stats.limit}
+                    </span>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all duration-300 ${
+                        stats.remaining <= 100
+                          ? "bg-red-500"
+                          : stats.remaining <= 300
+                          ? "bg-yellow-500"
+                          : "bg-green-500"
+                      }`}
+                      style={{ width: `${(stats.used / stats.limit) * 100}%` }}
+                    />
+                  </div>
+
+                  <div className="flex justify-between items-center text-xs text-gray-600">
+                    <span>Remaining: {stats.remaining}</span>
+                    <div className="flex items-center space-x-1">
+                      <Clock className="h-3 w-3" />
+                      <span>Resets in {formatResetTime(stats.resetTime)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {stats.remaining <= 100 && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      You are running low on property processing requests. Only{" "}
+                      {stats.remaining} requests remaining until tomorrow.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!stats.canMakeRequests && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Property processing limit reached. Upload functionality is
+                      disabled until tomorrow.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
 
         {/* Image Upload */}
         <Card>
@@ -329,9 +499,15 @@ export default function UploadPage() {
                 {/* Extract Names Button - immediately after upload button */}
                 <Button
                   onClick={handleExtractNames}
-                  disabled={!selectedFile || isExtracting}
+                  disabled={
+                    !selectedFile ||
+                    isExtracting ||
+                    stats?.canMakeRequests === false
+                  }
                   className={`inline-flex items-center justify-center px-4 h-10 w-full sm:w-auto text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors min-w-[100px] ${
-                    !selectedFile || isExtracting
+                    !selectedFile ||
+                    isExtracting ||
+                    stats?.canMakeRequests === false
                       ? "opacity-50 cursor-not-allowed"
                       : ""
                   }`}
@@ -607,7 +783,8 @@ export default function UploadPage() {
                   disabled={
                     isProcessing ||
                     extractedProperties.length === 0 ||
-                    !parentAddress.trim()
+                    !parentAddress.trim() ||
+                    stats?.canMakeRequests === false
                   }
                   className="w-full"
                   size="lg"

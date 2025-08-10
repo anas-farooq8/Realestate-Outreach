@@ -2,6 +2,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { enrichPropertyData } from "@/lib/gemini";
 import { sendCompletionEmail } from "@/lib/email";
+import {
+  canProcessProperties,
+  incrementProcessPropertiesRequests,
+  getRequestStats,
+} from "@/lib/request-tracker";
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -16,7 +21,7 @@ async function processPropertiesAsync(
   const failedProperties: string[] = [];
 
   // Large batch size for parallel processing
-  const batchSize = 100;
+  const batchSize = 50;
 
   // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
@@ -64,6 +69,14 @@ async function processPropertiesAsync(
         propertyName,
         parentAddress
       );
+
+      // Increment request count after successful Gemini API call
+      const incrementSuccess = await incrementProcessPropertiesRequests(1);
+      if (!incrementSuccess) {
+        console.warn(
+          `Failed to increment process properties request count for ${propertyName}`
+        );
+      }
 
       // Create individual client for insertion
       const supabase = await createClient();
@@ -150,7 +163,7 @@ async function processPropertiesAsync(
         )}%)`
       );
 
-      // Wait 10 seconds between batches (if not the last batch)
+      // Wait 5 seconds between batches (if not the last batch)
       if (i + batchSize < properties.length) {
         console.log(`⏸️ Waiting 5 seconds before next batch...`);
         await delay(5000);
@@ -220,34 +233,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`🎬 Starting processing for ${properties.length} properties`);
-
-    // Process properties SYNCHRONOUSLY - wait for ALL batches to complete
-    try {
-      await processPropertiesAsync(properties, parentAddress, user.email!);
-
-      console.log(`✅ All processing completed successfully`);
-
-      return NextResponse.json({
-        message: "Processing completed",
-        total: properties.length,
-        status: "completed",
-      });
-    } catch (processingError) {
-      console.error("🚨 Error during property processing:", processingError);
-
+    // Check if we can make all the required requests within daily limit
+    const requestCount = properties.length; // Each property = 1 Gemini API call
+    const canProceed = await canProcessProperties(requestCount);
+    if (!canProceed) {
+      const stats = await getRequestStats();
       return NextResponse.json(
         {
-          error: "Processing failed",
-          message:
-            processingError instanceof Error
-              ? processingError.message
-              : "Unknown error",
-          status: "failed",
+          error: "Daily request limit exceeded",
+          details: `Processing ${requestCount} properties would exceed the daily limit of ${
+            stats?.limit || 1500
+          } requests. Current usage: ${stats?.used || 0}/${
+            stats?.limit || 1500
+          }. Limit resets at midnight UTC.`,
+          requestsNeeded: requestCount,
+          currentUsage: stats?.used || 0,
+          remainingRequests: stats?.remaining || 0,
+          resetTime: stats?.resetTime || null,
         },
-        { status: 500 }
+        { status: 429 }
       );
     }
+
+    console.log(`🎬 Starting processing for ${properties.length} properties`);
+
+    // Start processing in the background (fire-and-forget)
+    processPropertiesAsync(properties, parentAddress, user.email!).catch(
+      (error) => {
+        console.error("🚨 Background processing error:", error);
+      }
+    );
+
+    // Return immediate response to user
+    return NextResponse.json({
+      message: "Processing started successfully",
+      total: properties.length,
+      status: "processing",
+    });
   } catch (error) {
     console.error("💥 Error in process-properties API:", error);
     return NextResponse.json(
