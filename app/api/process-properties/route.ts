@@ -374,25 +374,32 @@ export async function POST(request: NextRequest) {
     console.log(`📍 Parent address: ${parentAddress}`);
     console.log(`👤 User email: ${user.email}`);
 
-    // Process properties asynchronously
-    processPropertiesAsync(properties, parentAddress, user.email!).catch(
-      (error) => {
-        console.error("🚨 Unhandled error in async processing:", error);
-      }
-    );
+    // Process properties SYNCHRONOUSLY - wait for completion like extract-names route
+    try {
+      await processPropertiesAsync(properties, parentAddress, user.email!);
 
-    // Give the async process a moment to start
-    await delay(1000);
+      console.log(`✅ API Handler: All processing completed successfully`);
 
-    console.log(
-      `✅ API Handler: Processing started successfully, returning response`
-    );
+      return NextResponse.json({
+        message: "Processing completed",
+        total: properties.length,
+        status: "completed",
+      });
+    } catch (processingError) {
+      console.error("🚨 Error during property processing:", processingError);
 
-    return NextResponse.json({
-      message: "Processing started",
-      total: properties.length,
-      status: "initiated",
-    });
+      return NextResponse.json(
+        {
+          error: "Processing failed",
+          message:
+            processingError instanceof Error
+              ? processingError.message
+              : "Unknown error",
+          status: "failed",
+        },
+        { status: 500 }
+      );
+    }
   } catch (error) {
     console.error("💥 Error in process-properties API:", error);
     return NextResponse.json(
