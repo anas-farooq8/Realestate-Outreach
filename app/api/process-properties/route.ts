@@ -42,8 +42,15 @@ async function processPropertiesAsync(
   async function propertyExists(propertyName: string): Promise<boolean> {
     let supabase;
     try {
+      console.log(
+        `🔍 Creating Supabase client to check existence of: ${propertyName}`
+      );
       // Create individual client for this operation
       supabase = await createClient();
+      console.log(
+        `✅ Supabase client created, querying database for: ${propertyName}`
+      );
+
       const { data, error } = await supabase
         .from("properties")
         .select("id")
@@ -51,13 +58,18 @@ async function processPropertiesAsync(
         .limit(1);
 
       if (error) {
-        console.error("Error checking property existence:", error);
+        console.error(`❌ Database error checking ${propertyName}:`, error);
         return false; // If we can't check, proceed with processing
       }
 
-      return data && data.length > 0;
+      const exists = data && data.length > 0;
+      console.log(`🔍 Property ${propertyName} exists: ${exists}`);
+      return exists;
     } catch (error) {
-      console.error("Error checking property existence:", error);
+      console.error(
+        `💥 Exception checking property existence for ${propertyName}:`,
+        error
+      );
       return false; // If we can't check, proceed with processing
     }
   }
@@ -69,19 +81,50 @@ async function processPropertiesAsync(
   ): Promise<"processed" | "skipped" | "failed"> {
     let supabase;
     try {
+      console.log(
+        `[${
+          requestIndex + 1
+        }] 🔍 Starting to check if ${propertyName} exists...`
+      );
+
       // Check if property already exists
       const exists = await propertyExists(propertyName);
       if (exists) {
+        console.log(
+          `[${requestIndex + 1}] ⏭️ ${propertyName} already exists, skipping`
+        );
         skippedProperties.push(propertyName);
         return "skipped";
       }
 
-      console.log(`[${requestIndex + 1}] Processing property: ${propertyName}`);
+      console.log(
+        `[${
+          requestIndex + 1
+        }] 🤖 Starting Gemini enrichment for: ${propertyName}`
+      );
 
-      // Call enrichPropertyData which now has built-in retry logic (3 attempts)
-      const enrichedData = await enrichPropertyData(
-        propertyName,
-        parentAddress
+      // Call enrichPropertyData with timeout protection
+      const enrichmentTimeout = new Promise((_, reject) =>
+        setTimeout(
+          () => reject(new Error("Gemini API timeout after 30 seconds")),
+          30000
+        )
+      );
+
+      const enrichedData = (await Promise.race([
+        enrichPropertyData(propertyName, parentAddress),
+        enrichmentTimeout,
+      ])) as Record<string, string>;
+
+      console.log(
+        `[${
+          requestIndex + 1
+        }] ✅ Gemini enrichment completed for: ${propertyName}`
+      );
+      console.log(
+        `[${requestIndex + 1}] 📊 Enriched data keys: ${Object.keys(
+          enrichedData
+        ).join(", ")}`
       );
 
       // Validate that we have some useful data before inserting
@@ -93,9 +136,13 @@ async function processPropertiesAsync(
         console.log(
           `[${
             requestIndex + 1
-          }] No useful data found for ${propertyName}, inserting with minimal info`
+          }] ⚠️ No useful data found for ${propertyName}, inserting with minimal info`
         );
       }
+
+      console.log(
+        `[${requestIndex + 1}] 💾 Inserting ${propertyName} into database...`
+      );
 
       // Create individual client for insertion
       supabase = await createClient();
@@ -103,10 +150,10 @@ async function processPropertiesAsync(
       // Insert into properties table with correct schema
       const { error: insertError } = await supabase.from("properties").insert({
         property_address: propertyName, // Store only the property name
-        zip_code: enrichedData.zip_code || null,
         city: enrichedData.city || null,
         county: enrichedData.county || null,
         state: enrichedData.state || null,
+        zip_code: enrichedData.zip_code || null,
         decision_maker_name: enrichedData.decision_maker_name || null,
         decision_maker_email: enrichedData.email || null,
         decision_maker_phone: enrichedData.phone || null,
@@ -115,7 +162,9 @@ async function processPropertiesAsync(
 
       if (insertError) {
         console.error(
-          `[${requestIndex + 1}] Error inserting property ${propertyName}:`,
+          `[${
+            requestIndex + 1
+          }] ❌ Database insertion failed for ${propertyName}:`,
           insertError
         );
         failedProperties.push(propertyName);
@@ -124,15 +173,33 @@ async function processPropertiesAsync(
         console.log(
           `[${
             requestIndex + 1
-          }] ✅ Successfully processed property: ${propertyName}`
+          }] ✅ Successfully processed and saved: ${propertyName}`
         );
         return "processed";
       }
     } catch (error) {
       console.error(
-        `[${requestIndex + 1}] ❌ Error processing property ${propertyName}:`,
+        `[${requestIndex + 1}] 💥 Critical error processing ${propertyName}:`,
         error
       );
+
+      // Log specific error types
+      if (error instanceof Error) {
+        if (error.message.includes("timeout")) {
+          console.error(
+            `[${requestIndex + 1}] ⏰ Timeout error for ${propertyName}`
+          );
+        } else if (error.message.includes("fetch")) {
+          console.error(
+            `[${requestIndex + 1}] 🌐 Network error for ${propertyName}`
+          );
+        } else {
+          console.error(
+            `[${requestIndex + 1}] 🔍 Unknown error type: ${error.message}`
+          );
+        }
+      }
+
       failedProperties.push(propertyName);
       return "failed";
     }
@@ -142,6 +209,10 @@ async function processPropertiesAsync(
     console.log(
       `🚀 Starting serverless batch processing of ${properties.length} properties`
     );
+    console.log(
+      `📊 Batch size: ${batchSize} properties per batch (optimized for Vercel)`
+    );
+    console.log(`🎯 Properties to process: ${properties.join(", ")}`);
 
     for (let i = 0; i < properties.length; i += batchSize) {
       const batch = properties.slice(i, i + batchSize);
@@ -151,22 +222,39 @@ async function processPropertiesAsync(
       console.log(
         `\n🔄 Processing batch ${batchNumber}/${totalBatches}: ${batch.length} properties`
       );
+      console.log(`Properties in this batch: ${batch.join(", ")}`);
 
       // Start batch processing timestamp
       const batchStartTime = Date.now();
-
-      // Process all properties in the batch simultaneously (each with individual DB clients)
-      const batchPromises = batch.map((propertyName, index) =>
-        processSingleProperty(propertyName, i + index)
+      console.log(
+        `⏰ Batch ${batchNumber} started at: ${new Date().toISOString()}`
       );
 
+      // Process all properties in the batch simultaneously (each with individual DB clients)
+      const batchPromises = batch.map((propertyName, index) => {
+        console.log(
+          `🏗️ Creating promise for property ${i + index + 1}: ${propertyName}`
+        );
+        return processSingleProperty(propertyName, i + index);
+      });
+
       console.log(`🚦 Starting ${batch.length} simultaneous requests...`);
+      console.log(`📝 Waiting for Promise.all to complete...`);
+
       const batchResults = await Promise.all(batchPromises);
+
+      console.log(
+        `✅ Promise.all completed! Results: ${batchResults.join(", ")}`
+      );
 
       // Calculate actual batch time
       const batchEndTime = Date.now();
       const actualBatchTime = Math.round(
         (batchEndTime - batchStartTime) / 1000
+      );
+
+      console.log(
+        `⏰ Batch ${batchNumber} ended at: ${new Date().toISOString()}`
       );
 
       // Count results
@@ -199,7 +287,7 @@ async function processPropertiesAsync(
 
       // Add delay between batches to ensure we don't overwhelm the API/database
       if (i + batchSize < properties.length) {
-        const delayTime = 5000; // 5 seconds between batches for smaller batches
+        const delayTime = 2000; // 2 seconds between batches for individual processing
         console.log(
           `⏸️  Waiting ${
             delayTime / 1000
@@ -280,15 +368,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log(
+      `🎬 API Handler: Starting processing for ${properties.length} properties`
+    );
+    console.log(`📍 Parent address: ${parentAddress}`);
+    console.log(`👤 User email: ${user.email}`);
+
     // Process properties asynchronously
-    processPropertiesAsync(properties, parentAddress, user.email!);
+    processPropertiesAsync(properties, parentAddress, user.email!).catch(
+      (error) => {
+        console.error("🚨 Unhandled error in async processing:", error);
+      }
+    );
+
+    // Give the async process a moment to start
+    await delay(1000);
+
+    console.log(
+      `✅ API Handler: Processing started successfully, returning response`
+    );
 
     return NextResponse.json({
       message: "Processing started",
       total: properties.length,
+      status: "initiated",
     });
   } catch (error) {
-    console.error("Error in process-properties API:", error);
+    console.error("💥 Error in process-properties API:", error);
     return NextResponse.json(
       { error: "Failed to start processing" },
       { status: 500 }
