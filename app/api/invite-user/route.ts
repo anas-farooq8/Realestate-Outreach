@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send invitation email
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL!}/login`;
+    const loginUrl = `${process.env.PUBLIC_APP_URL!}/login`;
     const inviteEmailHtml = createInviteEmailTemplate({
       email,
       temporaryPassword,

@@ -124,7 +124,6 @@ export async function extractNamesFromImage(
         const uniqueNames = [
           ...new Set(lines.map((name) => name.toUpperCase())),
         ];
-        console.log("Parsed extracted names:", uniqueNames);
         return uniqueNames;
       }
     }

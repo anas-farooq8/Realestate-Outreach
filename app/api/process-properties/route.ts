@@ -9,8 +9,8 @@ import { sendCompletionEmail } from "@/lib/email";
  * ===============================================================================
  *
  * This API route handles the complete property processing workflow:
- * 1. Batch management (100 simultaneous requests per batch)
- * 2. Database operations (checking duplicates, inserting data)
+ * 1. Batch management (smaller batches for serverless environment)
+ * 2. Database operations (individual clients to avoid connection limits)
  * 3. Error handling and retry coordination
  * 4. Progress tracking and logging
  * 5. Email notifications on completion
@@ -18,7 +18,7 @@ import { sendCompletionEmail } from "@/lib/email";
  * ARCHITECTURE:
  * - Uses enrichPropertyData() from lib/gemini.ts for individual AI requests
  * - Handles all business logic, database access, and user notifications
- * - Implements 100 simultaneous requests per batch with 10-second delays
+ * - Implements smaller batches with individual database clients for Vercel
  * - Each property gets up to 3 retry attempts (handled in gemini.ts)
  * ===============================================================================
  */
@@ -28,20 +28,22 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function processPropertiesAsync(
   properties: string[],
   parentAddress: string,
-  userEmail: string,
-  supabase: any
+  userEmail: string
 ) {
   let processedCount = 0;
   let skippedCount = 0;
   const skippedProperties: string[] = [];
   const failedProperties: string[] = [];
 
-  // Large batch size for maximum throughput
-  const batchSize = 100;
+  // Smaller batch size for serverless environment to avoid connection limits
+  const batchSize = 10;
 
-  // Function to check if property already exists
+  // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
+    let supabase;
     try {
+      // Create individual client for this operation
+      supabase = await createClient();
       const { data, error } = await supabase
         .from("properties")
         .select("id")
@@ -65,6 +67,7 @@ async function processPropertiesAsync(
     propertyName: string,
     requestIndex: number
   ): Promise<"processed" | "skipped" | "failed"> {
+    let supabase;
     try {
       // Check if property already exists
       const exists = await propertyExists(propertyName);
@@ -72,6 +75,8 @@ async function processPropertiesAsync(
         skippedProperties.push(propertyName);
         return "skipped";
       }
+
+      console.log(`[${requestIndex + 1}] Processing property: ${propertyName}`);
 
       // Call enrichPropertyData which now has built-in retry logic (3 attempts)
       const enrichedData = await enrichPropertyData(
@@ -92,13 +97,16 @@ async function processPropertiesAsync(
         );
       }
 
+      // Create individual client for insertion
+      supabase = await createClient();
+
       // Insert into properties table with correct schema
       const { error: insertError } = await supabase.from("properties").insert({
         property_address: propertyName, // Store only the property name
+        zip_code: enrichedData.zip_code || null,
         city: enrichedData.city || null,
         county: enrichedData.county || null,
         state: enrichedData.state || null,
-        zip_code: enrichedData.zip_code || null,
         decision_maker_name: enrichedData.decision_maker_name || null,
         decision_maker_email: enrichedData.email || null,
         decision_maker_phone: enrichedData.phone || null,
@@ -132,7 +140,10 @@ async function processPropertiesAsync(
 
   try {
     console.log(
-      `🚀 Starting large batch processing of ${properties.length} properties`
+      `🚀 Starting serverless batch processing of ${properties.length} properties`
+    );
+    console.log(
+      `📊 Batch size: ${batchSize} properties per batch (optimized for Vercel)`
     );
 
     for (let i = 0; i < properties.length; i += batchSize) {
@@ -143,15 +154,17 @@ async function processPropertiesAsync(
       console.log(
         `\n🔄 Processing batch ${batchNumber}/${totalBatches}: ${batch.length} properties`
       );
+      console.log(`Properties in this batch: ${batch.join(", ")}`);
 
       // Start batch processing timestamp
       const batchStartTime = Date.now();
 
-      // Process all properties in the batch simultaneously (no staggered delays)
+      // Process all properties in the batch simultaneously (each with individual DB clients)
       const batchPromises = batch.map((propertyName, index) =>
-        processSingleProperty(propertyName, index)
+        processSingleProperty(propertyName, i + index)
       );
 
+      console.log(`🚦 Starting ${batch.length} simultaneous requests...`);
       const batchResults = await Promise.all(batchPromises);
 
       // Calculate actual batch time
@@ -188,9 +201,9 @@ async function processPropertiesAsync(
         )}%)`
       );
 
-      // Add delay between batches to ensure we don't overwhelm the API
+      // Add delay between batches to ensure we don't overwhelm the API/database
       if (i + batchSize < properties.length) {
-        const delayTime = 10000; // 10 seconds between batches for safety
+        const delayTime = 5000; // 5 seconds between batches for smaller batches
         console.log(
           `⏸️  Waiting ${
             delayTime / 1000
@@ -201,7 +214,7 @@ async function processPropertiesAsync(
     }
 
     const totalFailed = failedProperties.length;
-    console.log(`\n🎯 Large batch processing completed!`);
+    console.log(`\n🎯 Serverless batch processing completed!`);
     console.log(`📊 Final results:`);
     console.log(`   - Total properties: ${properties.length}`);
     console.log(`   - Successfully processed: ${processedCount}`);
@@ -272,7 +285,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Process properties asynchronously
-    processPropertiesAsync(properties, parentAddress, user.email!, supabase);
+    processPropertiesAsync(properties, parentAddress, user.email!);
 
     return NextResponse.json({
       message: "Processing started",
