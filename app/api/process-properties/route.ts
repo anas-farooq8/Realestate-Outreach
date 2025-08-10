@@ -3,26 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { enrichPropertyData } from "@/lib/gemini";
 import { sendCompletionEmail } from "@/lib/email";
 
-/**
- * ===============================================================================
- * PROPERTY PROCESSING API ROUTE
- * ===============================================================================
- *
- * This API route handles the complete property processing workflow:
- * 1. Batch management (smaller batches for serverless environment)
- * 2. Database operations (individual clients to avoid connection limits)
- * 3. Error handling and retry coordination
- * 4. Progress tracking and logging
- * 5. Email notifications on completion
- *
- * ARCHITECTURE:
- * - Uses enrichPropertyData() from lib/gemini.ts for individual AI requests
- * - Handles all business logic, database access, and user notifications
- * - Implements smaller batches with individual database clients for Vercel
- * - Each property gets up to 3 retry attempts (handled in gemini.ts)
- * ===============================================================================
- */
-
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function processPropertiesAsync(
@@ -35,22 +15,13 @@ async function processPropertiesAsync(
   const skippedProperties: string[] = [];
   const failedProperties: string[] = [];
 
-  // Smaller batch size for serverless environment to avoid connection limits
-  const batchSize = 1;
+  // Large batch size for parallel processing
+  const batchSize = 100;
 
   // Function to check if property already exists with individual client
   async function propertyExists(propertyName: string): Promise<boolean> {
-    let supabase;
     try {
-      console.log(
-        `🔍 Creating Supabase client to check existence of: ${propertyName}`
-      );
-      // Create individual client for this operation
-      supabase = await createClient();
-      console.log(
-        `✅ Supabase client created, querying database for: ${propertyName}`
-      );
-
+      const supabase = await createClient();
       const { data, error } = await supabase
         .from("properties")
         .select("id")
@@ -58,98 +29,48 @@ async function processPropertiesAsync(
         .limit(1);
 
       if (error) {
-        console.error(`❌ Database error checking ${propertyName}:`, error);
-        return false; // If we can't check, proceed with processing
+        console.error(
+          `Error checking property existence for ${propertyName}:`,
+          error
+        );
+        return false;
       }
 
-      const exists = data && data.length > 0;
-      console.log(`🔍 Property ${propertyName} exists: ${exists}`);
-      return exists;
+      return data && data.length > 0;
     } catch (error) {
       console.error(
-        `💥 Exception checking property existence for ${propertyName}:`,
+        `Exception checking property existence for ${propertyName}:`,
         error
       );
-      return false; // If we can't check, proceed with processing
+      return false;
     }
   }
 
-  // Function to process a single property with enhanced error handling and retry logic
+  // Function to process a single property
   async function processSingleProperty(
     propertyName: string,
     requestIndex: number
   ): Promise<"processed" | "skipped" | "failed"> {
-    let supabase;
     try {
-      console.log(
-        `[${
-          requestIndex + 1
-        }] 🔍 Starting to check if ${propertyName} exists...`
-      );
-
       // Check if property already exists
       const exists = await propertyExists(propertyName);
       if (exists) {
-        console.log(
-          `[${requestIndex + 1}] ⏭️ ${propertyName} already exists, skipping`
-        );
         skippedProperties.push(propertyName);
         return "skipped";
       }
 
-      console.log(
-        `[${
-          requestIndex + 1
-        }] 🤖 Starting Gemini enrichment for: ${propertyName}`
-      );
-
-      // Call enrichPropertyData with timeout protection
-      const enrichmentTimeout = new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error("Gemini API timeout after 30 seconds")),
-          30000
-        )
-      );
-
-      const enrichedData = (await Promise.race([
-        enrichPropertyData(propertyName, parentAddress),
-        enrichmentTimeout,
-      ])) as Record<string, string>;
-
-      console.log(
-        `[${
-          requestIndex + 1
-        }] ✅ Gemini enrichment completed for: ${propertyName}`
-      );
-      console.log(
-        `[${requestIndex + 1}] 📊 Enriched data keys: ${Object.keys(
-          enrichedData
-        ).join(", ")}`
-      );
-
-      // Validate that we have some useful data before inserting
-      const hasUsefulData = Object.keys(enrichedData).some(
-        (key) => enrichedData[key] && enrichedData[key].trim().length > 0
-      );
-
-      if (!hasUsefulData) {
-        console.log(
-          `[${
-            requestIndex + 1
-          }] ⚠️ No useful data found for ${propertyName}, inserting with minimal info`
-        );
-      }
-
-      console.log(
-        `[${requestIndex + 1}] 💾 Inserting ${propertyName} into database...`
+      // Call Gemini API for property enrichment
+      const enrichedData = await enrichPropertyData(
+        propertyName,
+        parentAddress
       );
 
       // Create individual client for insertion
-      supabase = await createClient();
+      const supabase = await createClient();
 
-      // Insert into properties table with correct schema
+      // Insert into properties table
       const { error: insertError } = await supabase.from("properties").insert({
-        property_address: propertyName, // Store only the property name
+        property_address: propertyName,
         city: enrichedData.city || null,
         county: enrichedData.county || null,
         state: enrichedData.state || null,
@@ -162,44 +83,17 @@ async function processPropertiesAsync(
 
       if (insertError) {
         console.error(
-          `[${
-            requestIndex + 1
-          }] ❌ Database insertion failed for ${propertyName}:`,
+          `Database insertion failed for ${propertyName}:`,
           insertError
         );
         failedProperties.push(propertyName);
         return "failed";
       } else {
-        console.log(
-          `[${
-            requestIndex + 1
-          }] ✅ Successfully processed and saved: ${propertyName}`
-        );
+        console.log(`✅ Successfully processed: ${propertyName}`);
         return "processed";
       }
     } catch (error) {
-      console.error(
-        `[${requestIndex + 1}] 💥 Critical error processing ${propertyName}:`,
-        error
-      );
-
-      // Log specific error types
-      if (error instanceof Error) {
-        if (error.message.includes("timeout")) {
-          console.error(
-            `[${requestIndex + 1}] ⏰ Timeout error for ${propertyName}`
-          );
-        } else if (error.message.includes("fetch")) {
-          console.error(
-            `[${requestIndex + 1}] 🌐 Network error for ${propertyName}`
-          );
-        } else {
-          console.error(
-            `[${requestIndex + 1}] 🔍 Unknown error type: ${error.message}`
-          );
-        }
-      }
-
+      console.error(`Error processing ${propertyName}:`, error);
       failedProperties.push(propertyName);
       return "failed";
     }
@@ -207,12 +101,8 @@ async function processPropertiesAsync(
 
   try {
     console.log(
-      `🚀 Starting serverless batch processing of ${properties.length} properties`
+      `🚀 Starting batch processing of ${properties.length} properties`
     );
-    console.log(
-      `📊 Batch size: ${batchSize} properties per batch (optimized for Vercel)`
-    );
-    console.log(`🎯 Properties to process: ${properties.join(", ")}`);
 
     for (let i = 0; i < properties.length; i += batchSize) {
       const batch = properties.slice(i, i + batchSize);
@@ -222,40 +112,19 @@ async function processPropertiesAsync(
       console.log(
         `\n🔄 Processing batch ${batchNumber}/${totalBatches}: ${batch.length} properties`
       );
-      console.log(`Properties in this batch: ${batch.join(", ")}`);
 
-      // Start batch processing timestamp
       const batchStartTime = Date.now();
-      console.log(
-        `⏰ Batch ${batchNumber} started at: ${new Date().toISOString()}`
+
+      // Process ALL properties in this batch in PARALLEL
+      const batchPromises = batch.map((propertyName, index) =>
+        processSingleProperty(propertyName, i + index)
       );
 
-      // Process all properties in the batch simultaneously (each with individual DB clients)
-      const batchPromises = batch.map((propertyName, index) => {
-        console.log(
-          `🏗️ Creating promise for property ${i + index + 1}: ${propertyName}`
-        );
-        return processSingleProperty(propertyName, i + index);
-      });
-
-      console.log(`🚦 Starting ${batch.length} simultaneous requests...`);
-      console.log(`📝 Waiting for Promise.all to complete...`);
-
+      // Wait for ALL properties in this batch to complete
       const batchResults = await Promise.all(batchPromises);
 
-      console.log(
-        `✅ Promise.all completed! Results: ${batchResults.join(", ")}`
-      );
-
-      // Calculate actual batch time
       const batchEndTime = Date.now();
-      const actualBatchTime = Math.round(
-        (batchEndTime - batchStartTime) / 1000
-      );
-
-      console.log(
-        `⏰ Batch ${batchNumber} ended at: ${new Date().toISOString()}`
-      );
+      const batchTime = Math.round((batchEndTime - batchStartTime) / 1000);
 
       // Count results
       const successfulInBatch = batchResults.filter(
@@ -272,11 +141,8 @@ async function processPropertiesAsync(
       skippedCount += skippedInBatch;
 
       console.log(
-        `✅ Batch ${batchNumber} completed in ${actualBatchTime} seconds:`
+        `✅ Batch ${batchNumber} completed in ${batchTime}s - Processed: ${successfulInBatch}, Skipped: ${skippedInBatch}, Failed: ${failedInBatch}`
       );
-      console.log(`   - Processed: ${successfulInBatch}`);
-      console.log(`   - Skipped: ${skippedInBatch}`);
-      console.log(`   - Failed: ${failedInBatch}`);
       console.log(
         `📈 Total progress: ${processedCount + skippedCount}/${
           properties.length
@@ -285,35 +151,24 @@ async function processPropertiesAsync(
         )}%)`
       );
 
-      // Add delay between batches to ensure we don't overwhelm the API/database
+      // Wait 10 seconds between batches (if not the last batch)
       if (i + batchSize < properties.length) {
-        const delayTime = 2000; // 2 seconds between batches for individual processing
-        console.log(
-          `⏸️  Waiting ${
-            delayTime / 1000
-          } seconds before starting next batch...`
-        );
-        await delay(delayTime);
+        console.log(`⏸️ Waiting 10 seconds before next batch...`);
+        await delay(10000);
       }
     }
 
     const totalFailed = failedProperties.length;
-    console.log(`\n🎯 Serverless batch processing completed!`);
-    console.log(`📊 Final results:`);
-    console.log(`   - Total properties: ${properties.length}`);
-    console.log(`   - Successfully processed: ${processedCount}`);
-    console.log(`   - Skipped (duplicates): ${skippedCount}`);
-    console.log(`   - Failed (after retries): ${totalFailed}`);
+    console.log(`\n🎯 Processing completed!`);
+    console.log(
+      `📊 Final results: ${processedCount} processed, ${skippedCount} skipped, ${totalFailed} failed`
+    );
 
     if (failedProperties.length > 0) {
-      console.log(
-        `❌ Failed properties (after 3 retry attempts each): ${failedProperties.join(
-          ", "
-        )}`
-      );
+      console.log(`❌ Failed properties: ${failedProperties.join(", ")}`);
     }
 
-    // Send completion email with comprehensive results
+    // Send completion email
     await sendCompletionEmail(
       userEmail,
       properties.length,
@@ -324,7 +179,7 @@ async function processPropertiesAsync(
 
     console.log(`📧 Completion email sent to ${userEmail}`);
   } catch (error) {
-    console.error("💥 Error in async processing:", error);
+    console.error("💥 Error in processing:", error);
 
     // Send error notification email
     try {
@@ -368,17 +223,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(
-      `🎬 API Handler: Starting processing for ${properties.length} properties`
-    );
-    console.log(`📍 Parent address: ${parentAddress}`);
-    console.log(`👤 User email: ${user.email}`);
+    console.log(`🎬 Starting processing for ${properties.length} properties`);
 
-    // Process properties SYNCHRONOUSLY - wait for completion like extract-names route
+    // Process properties SYNCHRONOUSLY - wait for ALL batches to complete
     try {
       await processPropertiesAsync(properties, parentAddress, user.email!);
 
-      console.log(`✅ API Handler: All processing completed successfully`);
+      console.log(`✅ All processing completed successfully`);
 
       return NextResponse.json({
         message: "Processing completed",

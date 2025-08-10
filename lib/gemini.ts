@@ -2,32 +2,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// Enhanced delay function
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * ===============================================================================
- * GEMINI AI UTILITY FUNCTIONS
- * ===============================================================================
- *
- * This file contains individual AI functions for:
- * 1. Image analysis (extractNamesFromImage) - Uses Gemini Pro
- * 2. Property data enrichment (enrichPropertyData) - Uses Gemini Flash with web search
- *
- * ARCHITECTURE NOTE:
- * - This file handles INDIVIDUAL AI requests only
- * - Batch processing, database operations, and email notifications are handled
- *   in the API routes (app/api/process-properties/route.ts)
- * - This separation ensures clean separation of concerns:
- *   * Gemini file = AI utilities
- *   * API routes = Business logic, batching, database, notifications
- * ===============================================================================
- */
-
-/**
- * Extracts property/community names from an image using Gemini Pro (no web search needed).
- * Using Pro model for better accuracy with image analysis.
- */
 export async function extractNamesFromImage(
   imageBuffer: Buffer,
   mimeType: string
@@ -127,8 +101,6 @@ export async function extractNamesFromImage(
         return uniqueNames;
       }
     }
-
-    console.log("No names could be extracted from the response");
     return [];
   } catch (error) {
     console.error("Error extracting names from image:", error);
@@ -154,12 +126,6 @@ export async function enrichPropertyData(
   maxRetries: number = 3
 ): Promise<Record<string, string>> {
   try {
-    console.log(
-      `[Attempt ${retryCount + 1}/${
-        maxRetries + 1
-      }] Enriching data for property: ${propertyName} near ${parentAddress}`
-    );
-
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
       // Temporarily remove tools to test basic connectivity
@@ -191,14 +157,9 @@ export async function enrichPropertyData(
       Only include fields where you have information. Return ONLY the JSON object.
     `;
 
-    console.log(`🌐 Making Gemini API call for ${propertyName}...`);
-
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-
-    console.log(`✅ Gemini API call completed for ${propertyName}`);
-    console.log(`📝 Raw response: ${text.substring(0, 200)}...`);
 
     // Clean the response
     let cleanedText = text
@@ -214,21 +175,13 @@ export async function enrichPropertyData(
 
     try {
       const enrichedData = JSON.parse(cleanedText);
-      console.log(
-        `✅ Successfully parsed data for ${propertyName}:`,
-        enrichedData
-      );
       return enrichedData || {};
     } catch (parseError) {
-      console.error(`❌ JSON parsing failed for ${propertyName}:`, parseError);
-      console.error(`Raw text was: ${cleanedText}`);
+      console.error(`JSON parsing failed for ${propertyName}:`, parseError);
       return {};
     }
   } catch (error) {
-    console.error(
-      `❌ Error enriching property data for ${propertyName}:`,
-      error
-    );
+    console.error(`Error enriching property data for ${propertyName}:`, error);
     return {};
   }
 }
