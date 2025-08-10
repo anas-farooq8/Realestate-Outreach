@@ -172,9 +172,10 @@ async function processPropertiesAsync(
       userEmail,
       properties.length,
       processedCount,
-      skippedCount,
-      skippedProperties
+      skippedCount
     );
+
+    console.log(`📧 Completion email sent to ${userEmail}`);
   } catch (error) {
     console.error("💥 Error in processing:", error);
 
@@ -184,8 +185,7 @@ async function processPropertiesAsync(
         userEmail,
         properties.length,
         processedCount,
-        skippedCount,
-        skippedProperties
+        skippedCount
       );
     } catch (emailError) {
       console.error("Failed to send error notification email:", emailError);
