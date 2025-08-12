@@ -143,13 +143,13 @@ export async function enrichPropertyData(
       Provide the full name, email address, and phone number of the primary contact
       (ideally the property manager, community association manager, or decision-maker responsible for amenity services).
       Confirm whether the management is done by a third-party company or by an internal HOA office.
-      Include the full mailing address of the HOA or management company, broken down into street, city, state, and zip code.
+      Include the full mailing address of the HOA or management company, broken down into state, county, city, and zip code.
       Focus specifically on who makes amenity-related decisions because my company offers mobile massage services to residential communities.
       Output the results strictly as JSON with the following keys:
       {
         "management_company": "Company name if found",
         "decision_maker_name": "Contact person name if found",
-        "email": "Email if found",
+        "email": "Only write Email if found else leave this blank",
         "phone": "Phone if found", 
         "state": "State name if found (Full State Name, don't write in abbreviation)",
         "county": "County name if found" (County Name Only, don't attach 'county' to the end),
@@ -158,12 +158,11 @@ export async function enrichPropertyData(
       }
 
       Important:
-      - If exact information is not available, return the closest verified contact info (management company and general email/phone).
-      - Remember email search should be given priority.
+      - If exact information is not available, return the closest verified info.
+      - Remember email search should be given priority. And if email is not found, then do not write anything in the email field.
       - Do not include unrelated businesses or generic city government contacts.
-      - Do not add any explanation or text outside the JSON.
+      - Do not add any explanation or text outside the JSON, just return the JSON object.
       - Only include fields where you have information.
-      - Return ONLY the JSON object.
 
       Property Name: ${propertyName}
     `;

@@ -772,7 +772,7 @@ export default function UploadPage() {
                     className="w-full"
                   />
                   <p className="text-xs text-gray-500">
-                    Enter the general location (city, county, state) where these
+                    Enter the general location (state, county, city) where these
                     properties are located
                   </p>
                 </div>
