@@ -23,83 +23,102 @@ async function processPropertiesAsync(
   // Optimized batch size for better performance
   const batchSize = 50;
 
-  // Function to check if property already exists with individual client
-  async function propertyExists(propertyName: string): Promise<boolean> {
+  // Function to process a single property (Gemini API call only)
+  async function processSingleProperty(propertyName: string): Promise<{
+    propertyName: string;
+    status: "processed" | "failed";
+    enrichedData?: Record<string, string>;
+    processingTime: number;
+  }> {
+    const startTime = Date.now();
     try {
-      const supabase = await createClient();
-      const { data, error } = await supabase
-        .from("properties")
-        .select("id")
-        .eq("property_address", propertyName)
-        .limit(1);
-
-      if (error) {
-        console.error(
-          `Error checking property existence for ${propertyName}:`,
-          error
-        );
-        return false;
-      }
-
-      return data && data.length > 0;
-    } catch (error) {
-      console.error(
-        `Exception checking property existence for ${propertyName}:`,
-        error
-      );
-      return false;
-    }
-  }
-
-  // Function to process a single property
-  async function processSingleProperty(
-    propertyName: string,
-    requestIndex: number
-  ): Promise<"processed" | "skipped" | "failed"> {
-    try {
-      // Check if property already exists
-      const exists = await propertyExists(propertyName);
-      if (exists) {
-        skippedProperties.push(propertyName);
-        return "skipped";
-      }
-
       // Call Gemini API for property enrichment
       const enrichedData = await enrichPropertyData(
         propertyName,
         parentAddress
       );
 
-      // Create individual client for insertion
+      const processingTime = Date.now() - startTime;
+      console.log(`✅ ${propertyName}: ${processingTime}ms`);
+
+      return {
+        propertyName,
+        status: "processed",
+        enrichedData,
+        processingTime,
+      };
+    } catch (error) {
+      const processingTime = Date.now() - startTime;
+      console.error(`❌ ${propertyName} failed (${processingTime}ms):`, error);
+      failedProperties.push(propertyName);
+      return {
+        propertyName,
+        status: "failed",
+        processingTime,
+      };
+    }
+  }
+
+  // Batch function to check existing properties
+  async function getExistingProperties(
+    propertyNames: string[]
+  ): Promise<Set<string>> {
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("properties")
+        .select("property_address")
+        .in("property_address", propertyNames);
+
+      if (error) {
+        console.error("Error checking existing properties:", error);
+        return new Set();
+      }
+
+      return new Set(data?.map((row) => row.property_address) || []);
+    } catch (error) {
+      console.error("Exception checking existing properties:", error);
+      return new Set();
+    }
+  }
+
+  // Batch function to insert new properties
+  async function batchInsertProperties(
+    enrichedProperties: Array<{
+      propertyName: string;
+      enrichedData: Record<string, string>;
+    }>
+  ): Promise<number> {
+    if (enrichedProperties.length === 0) return 0;
+
+    try {
       const supabase = await createClient();
 
-      // Insert into properties table
-      const { error: insertError } = await supabase.from("properties").insert({
-        property_address: propertyName,
-        city: enrichedData.city || null,
-        county: enrichedData.county || null,
-        state: enrichedData.state || null,
-        zip_code: enrichedData.zip_code || null,
-        decision_maker_name: enrichedData.decision_maker_name || null,
-        decision_maker_email: enrichedData.email || null,
-        decision_maker_phone: enrichedData.phone || null,
-        hoa_or_management_company: enrichedData.management_company || null,
-      });
+      const insertData = enrichedProperties.map(
+        ({ propertyName, enrichedData }) => ({
+          property_address: propertyName,
+          city: enrichedData.city || null,
+          county: enrichedData.county || null,
+          state: enrichedData.state || null,
+          zip_code: enrichedData.zip_code || null,
+          decision_maker_name: enrichedData.decision_maker_name || null,
+          decision_maker_email: enrichedData.email || null,
+          decision_maker_phone: enrichedData.phone || null,
+          hoa_or_management_company: enrichedData.management_company || null,
+        })
+      );
 
-      if (insertError) {
-        console.error(
-          `Database insertion failed for ${propertyName}:`,
-          insertError
-        );
-        failedProperties.push(propertyName);
-        return "failed";
-      } else {
-        return "processed";
+      const { error } = await supabase.from("properties").insert(insertData);
+
+      if (error) {
+        console.error("Batch insertion failed:", error);
+        return 0;
       }
+
+      return enrichedProperties.length;
     } catch (error) {
-      console.error(`Error processing ${propertyName}:`, error);
-      failedProperties.push(propertyName);
-      return "failed";
+      console.error("Exception during batch insertion:", error);
+      return 0;
     }
   }
 
@@ -119,45 +138,99 @@ async function processPropertiesAsync(
 
       const batchStartTime = Date.now();
 
-      // Process ALL properties in this batch in PARALLEL
-      const batchPromises = batch.map((propertyName, index) =>
-        processSingleProperty(propertyName, i + index)
+      // Step 1: Check which properties already exist (single DB call)
+      console.log(`📋 Checking existing properties...`);
+      const existingProperties = await getExistingProperties(batch);
+
+      // Filter out existing properties
+      const newProperties = batch.filter(
+        (property) => !existingProperties.has(property)
+      );
+      const skippedInBatch = batch.length - newProperties.length;
+
+      if (skippedInBatch > 0) {
+        console.log(`⏭️ Skipping ${skippedInBatch} existing properties`);
+        skippedProperties.push(
+          ...batch.filter((property) => existingProperties.has(property))
+        );
+        skippedCount += skippedInBatch;
+      }
+
+      if (newProperties.length === 0) {
+        console.log(
+          `✅ Batch ${batchNumber} completed - all properties already exist`
+        );
+        continue;
+      }
+
+      // Step 2: Process ALL new properties in parallel (Gemini API calls)
+      console.log(
+        `🤖 Processing ${newProperties.length} new properties with Gemini...`
+      );
+      const geminiStartTime = Date.now();
+
+      const batchPromises = newProperties.map((propertyName) =>
+        processSingleProperty(propertyName)
       );
 
-      // Wait for ALL properties in this batch to complete
+      // Wait for ALL Gemini calls to complete
       const batchResults = await Promise.all(batchPromises);
 
-      const batchEndTime = Date.now();
-      const batchTime = Math.round((batchEndTime - batchStartTime) / 1000);
+      const geminiEndTime = Date.now();
+      const geminiTime = Math.round((geminiEndTime - geminiStartTime) / 1000);
 
-      // Count results
-      const successfulInBatch = batchResults.filter(
-        (result) => result === "processed"
-      ).length;
-      const skippedInBatch = batchResults.filter(
-        (result) => result === "skipped"
-      ).length;
+      // Separate successful and failed results
+      const successfulResults = batchResults.filter(
+        (result) => result.status === "processed"
+      );
       const failedInBatch = batchResults.filter(
-        (result) => result === "failed"
+        (result) => result.status === "failed"
       ).length;
 
-      processedCount += successfulInBatch;
-      skippedCount += skippedInBatch;
+      console.log(`🤖 Gemini processing completed in ${geminiTime}s`);
+      console.log(
+        `📊 Gemini results: ${successfulResults.length} successful, ${failedInBatch} failed`
+      );
 
-      // Update request count for successful Gemini API calls in this batch
-      if (successfulInBatch > 0) {
-        const incrementSuccess = await incrementProcessPropertiesRequests(
-          successfulInBatch
+      if (successfulResults.length > 0) {
+        // Step 3: Batch insert all successful properties (single DB call)
+        console.log(
+          `💾 Batch inserting ${successfulResults.length} properties...`
         );
-        if (!incrementSuccess) {
-          console.warn(
-            `Failed to increment request count for batch ${batchNumber}`
+        const dbStartTime = Date.now();
+
+        const enrichedProperties = successfulResults.map((result) => ({
+          propertyName: result.propertyName,
+          enrichedData: result.enrichedData!,
+        }));
+
+        const insertedCount = await batchInsertProperties(enrichedProperties);
+
+        const dbEndTime = Date.now();
+        const dbTime = dbEndTime - dbStartTime;
+
+        console.log(`💾 Database insertion completed in ${dbTime}ms`);
+
+        if (insertedCount > 0) {
+          processedCount += insertedCount;
+
+          // Step 4: Single increment of request count for this batch (processed + failed)
+          const incrementSuccess = await incrementProcessPropertiesRequests(
+            insertedCount + failedInBatch
           );
+          if (!incrementSuccess) {
+            console.warn(
+              `Failed to increment request count for batch ${batchNumber}`
+            );
+          }
         }
       }
 
+      const batchEndTime = Date.now();
+      const totalBatchTime = Math.round((batchEndTime - batchStartTime) / 1000);
+
       console.log(
-        `✅ Batch ${batchNumber} completed in ${batchTime}s - Processed: ${successfulInBatch}, Skipped: ${skippedInBatch}, Failed: ${failedInBatch}`
+        `✅ Batch ${batchNumber} completed in ${totalBatchTime}s - Processed: ${successfulResults.length}, Skipped: ${skippedInBatch}, Failed: ${failedInBatch}`
       );
       console.log(
         `📈 Total progress: ${processedCount + skippedCount}/${

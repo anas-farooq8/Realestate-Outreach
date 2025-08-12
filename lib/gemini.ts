@@ -117,18 +117,15 @@ export async function extractNamesFromImage(
 /**
  * Enriches property/community info using Gemini Flash with Google Search.
  * Using Flash model for cost efficiency with web search capabilities.
- * Includes retry mechanism for failed requests.
  */
 export async function enrichPropertyData(
   propertyName: string,
-  parentAddress: string,
-  retryCount: number = 0,
-  maxRetries: number = 3
+  parentAddress: string
 ): Promise<Record<string, string>> {
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-2.5-flash",
-      // Temporarily remove tools to test basic connectivity
+      // Use Google Search tool to get the most accurate information
       tools: [{ googleSearch: {} } as any],
       generationConfig: {
         temperature: 0.5, // Low temperature for factual data
