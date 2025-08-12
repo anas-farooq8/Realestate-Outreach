@@ -4,8 +4,8 @@
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [-208, 112],
-      "id": "521d8319-18e3-4292-aff5-291d69180806",
+      "position": [656, 128],
+      "id": "fdcfda3b-4709-40f0-b7a2-26e6410797ba",
       "name": "When clicking ‘Execute workflow’"
     },
     {
@@ -21,8 +21,8 @@
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [752, 16],
-      "id": "f5ef4de3-5201-4d80-b6dc-cb1d077a24fc",
+      "position": [1616, 32],
+      "id": "6875112e-0034-4254-a430-82ea99a56d81",
       "name": "Send a message",
       "webhookId": "13ec49f4-c7b3-4eed-9927-242c16e6eb3e",
       "retryOnFail": true,
@@ -64,8 +64,8 @@
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [928, 16],
-      "id": "880058c4-7446-4835-b762-7874cf0454f6",
+      "position": [1792, 32],
+      "id": "2fce5651-11e9-4bd9-8f8f-f170dc8be998",
       "name": "Log",
       "retryOnFail": true,
       "credentials": {
@@ -85,8 +85,8 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [-32, 0],
-      "id": "f980c2e4-f8f0-4f5d-82a4-a63effc0838a",
+      "position": [832, 16],
+      "id": "efe0cb04-d716-4631-bc2c-42f72995ec3e",
       "name": "Get Email Template",
       "alwaysOutputData": false,
       "retryOnFail": true,
@@ -105,8 +105,8 @@
       },
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [528, 0],
-      "id": "75045640-f92a-44e7-b5c7-a59676f3c939",
+      "position": [1392, 16],
+      "id": "7cb79ddd-3766-48e4-bad4-4451434565f2",
       "name": "Loop Over Items"
     },
     {
@@ -118,8 +118,8 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [-720, -320],
-      "id": "edaa85f1-1626-48f2-a5fc-ae8c7a2dcb2b",
+      "position": [144, -304],
+      "id": "b387eb06-a61f-4725-b921-04cf1ca577bd",
       "name": "Sticky Note"
     },
     {
@@ -128,8 +128,8 @@
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1104, 16],
-      "id": "e0ef9854-fd83-4d50-bf58-9f9fa570d38e",
+      "position": [1968, 32],
+      "id": "93c2b431-f473-46f3-bd4e-3bf93bd267c9",
       "name": "Wait",
       "webhookId": "5471eced-5594-44e8-bd47-4928faf86465"
     },
@@ -145,8 +145,8 @@
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [-208, -96],
-      "id": "4ee38f56-f206-443d-8fe0-bcfe7812e569",
+      "position": [656, -80],
+      "id": "da622108-2766-44bb-b35f-b5fadd154c1d",
       "name": "Schedule Trigger"
     },
     {
@@ -167,6 +167,11 @@
               "condition": "neq"
             },
             {
+              "keyName": "decision_maker_email",
+              "condition": "like",
+              "keyValue": "%@%"
+            },
+            {
               "keyName": "suspend_until",
               "condition": "lte",
               "keyValue": "={{ new Date().toISOString().split('T')[0] }}"
@@ -176,8 +181,8 @@
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [352, 0],
-      "id": "d584f434-5199-43b8-a350-92375139b7e7",
+      "position": [1216, 16],
+      "id": "f7183e15-ff21-430d-b3b3-b13d3ac86f77",
       "name": "Get Emails",
       "retryOnFail": true,
       "credentials": {
@@ -197,8 +202,8 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [752, -208],
-      "id": "0c8bda28-f7fa-48a8-896b-af6ab1614ddd",
+      "position": [1616, -192],
+      "id": "3986e8f5-cd19-4867-a2e6-3aceefa54f7b",
       "name": "Update Email Template",
       "alwaysOutputData": false,
       "retryOnFail": true,
@@ -218,8 +223,8 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [160, 0],
-      "id": "13bffdd5-ded6-417e-a59a-5d28d6ac7ff7",
+      "position": [1024, 16],
+      "id": "41162cc7-8c1e-46fb-8097-bb208726eb49",
       "name": "Format the Template",
       "retryOnFail": true
     }
@@ -319,9 +324,6 @@
           }
         ]
       ]
-    },
-    "Update Email Template": {
-      "main": [[]]
     },
     "Format the Template": {
       "main": [
