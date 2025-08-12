@@ -26,7 +26,7 @@ export function getBucketUrl(): string {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL environment variable is not set");
   }
 
-  // Extract project ID from URL (e.g., https://wiwxjzggfwkiqekkjtev.supabase.co)
+  // Extract project ID from URL
   const projectId = projectUrl
     .replace("https://", "")
     .replace(".supabase.co", "");
@@ -83,14 +83,6 @@ class DataCache {
   private isRootUser = false;
   private rootUserCacheTimestamp = 0;
   private readonly ROOT_USER_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
-
-  // Fetching flags to prevent concurrent requests
-  private fetchingProperties = false;
-  private fetchingEmailTemplates = false;
-  private fetchingEmailLogs = false;
-  private fetchingCampaignProgress = false;
-  private fetchingDashboardStats = false;
-  private fetchingPdfProposals = false;
 
   // Cache change listeners for React hooks
   private cacheChangeListeners: Array<() => void> = [];
