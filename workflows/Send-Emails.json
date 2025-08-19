@@ -4,7 +4,10 @@
       "parameters": {},
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [656, 128],
+      "position": [
+        656,
+        128
+      ],
       "id": "fdcfda3b-4709-40f0-b7a2-26e6410797ba",
       "name": "When clicking ‘Execute workflow’"
     },
@@ -21,7 +24,10 @@
       },
       "type": "n8n-nodes-base.gmail",
       "typeVersion": 2.1,
-      "position": [1616, 32],
+      "position": [
+        1616,
+        32
+      ],
       "id": "6875112e-0034-4254-a430-82ea99a56d81",
       "name": "Send a message",
       "webhookId": "13ec49f4-c7b3-4eed-9927-242c16e6eb3e",
@@ -64,7 +70,10 @@
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1792, 32],
+      "position": [
+        1792,
+        32
+      ],
       "id": "2fce5651-11e9-4bd9-8f8f-f170dc8be998",
       "name": "Log",
       "retryOnFail": true,
@@ -85,7 +94,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [832, 16],
+      "position": [
+        832,
+        16
+      ],
       "id": "efe0cb04-d716-4631-bc2c-42f72995ec3e",
       "name": "Get Email Template",
       "alwaysOutputData": false,
@@ -105,7 +117,10 @@
       },
       "type": "n8n-nodes-base.splitInBatches",
       "typeVersion": 3,
-      "position": [1392, 16],
+      "position": [
+        1392,
+        16
+      ],
       "id": "7cb79ddd-3766-48e4-bad4-4451434565f2",
       "name": "Loop Over Items"
     },
@@ -118,17 +133,23 @@
       },
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [144, -304],
+      "position": [
+        144,
+        -304
+      ],
       "id": "b387eb06-a61f-4725-b921-04cf1ca577bd",
       "name": "Sticky Note"
     },
     {
       "parameters": {
-        "amount": 15
+        "amount": 30
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1968, 32],
+      "position": [
+        1968,
+        32
+      ],
       "id": "93c2b431-f473-46f3-bd4e-3bf93bd267c9",
       "name": "Wait",
       "webhookId": "5471eced-5594-44e8-bd47-4928faf86465"
@@ -137,15 +158,16 @@
       "parameters": {
         "rule": {
           "interval": [
-            {
-              "field": "weeks"
-            }
+            {}
           ]
         }
       },
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [656, -80],
+      "position": [
+        656,
+        -80
+      ],
       "id": "da622108-2766-44bb-b35f-b5fadd154c1d",
       "name": "Schedule Trigger"
     },
@@ -181,7 +203,10 @@
       },
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1216, 16],
+      "position": [
+        1216,
+        16
+      ],
       "id": "f7183e15-ff21-430d-b3b3-b13d3ac86f77",
       "name": "Get Emails",
       "retryOnFail": true,
@@ -202,7 +227,10 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1616, -192],
+      "position": [
+        1616,
+        -192
+      ],
       "id": "3986e8f5-cd19-4867-a2e6-3aceefa54f7b",
       "name": "Update Email Template",
       "alwaysOutputData": false,
@@ -223,7 +251,10 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1024, 16],
+      "position": [
+        1024,
+        16
+      ],
       "id": "41162cc7-8c1e-46fb-8097-bb208726eb49",
       "name": "Format the Template",
       "retryOnFail": true
