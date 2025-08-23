@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowRight, Mail, Globe } from "lucide-react";
 import { useHomeController } from "@/hooks/use-home-controller";
+import { Logo } from "@/components/logo";
 
 export default function HomePage() {
   const { features, heroContent, featuresContent, ctaContent } =
@@ -24,6 +25,17 @@ export default function HomePage() {
 
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 lg:py-10">
           <div className="text-center">
+            {/* Logo */}
+            <div className="flex justify-center mb-8 sm:mb-12">
+              <Logo 
+                size="xl" 
+                variant="colored" 
+                showText={false}
+                clickable={false}
+                className="transform hover:scale-105 transition-transform duration-300"
+              />
+            </div>
+
             {/* Mobile-optimized hero title */}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight text-gray-900 mb-6 leading-tight">
               <span className="block mb-2">{heroContent.title.main}</span>

@@ -73,6 +73,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import type { EmailTemplate } from "@/lib/types";
 
 type FilterType = "all" | "active" | "inactive";
@@ -726,8 +727,15 @@ export default function EmailTemplatesPage() {
           </CardHeader>
           <CardContent>
             {isShowingLoading ? (
-              <div className="flex justify-center py-8">
-                <RefreshCw className="h-8 w-8 animate-spin" />
+              <div className="flex flex-col items-center justify-center py-8 space-y-6">
+                <Logo 
+                  size="md" 
+                  variant="colored" 
+                  showText={false}
+                  clickable={false}
+                />
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
+                <p className="text-gray-500 text-sm">Loading email templates...</p>
               </div>
             ) : filteredAndSortedTemplates.length === 0 ? (
               <div className="text-center py-8">

@@ -27,7 +27,6 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { dataCache } from "@/lib/cache";
 import { useAuth } from "@/lib/auth-context";
 import {
-  Home,
   Upload,
   BarChart3,
   Mail,
@@ -43,6 +42,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
+import { Logo, CompactLogo } from "@/components/logo";
 import {
   Sheet,
   SheetContent,
@@ -272,15 +272,19 @@ export function Navbar({ children }: NavbarProps) {
           <div className="flex flex-col flex-1 bg-white shadow-lg">
             {/* Logo Section */}
             <div className="flex items-center justify-between h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
-              {!sidebarCollapsed && (
-                <div className="flex items-center space-x-3">
-                  <div className="p-1.5 bg-white/20 rounded-lg">
-                    <Home className="h-6 w-6 text-white" />
-                  </div>
-                  <span className="text-lg font-bold text-white">
-                    RealEstate OutReach
-                  </span>
-                </div>
+              {!sidebarCollapsed ? (
+                <Logo 
+                  size="md" 
+                  variant="light" 
+                  showText={true}
+                  clickable={true}
+                  href="/"
+                />
+              ) : (
+                <CompactLogo 
+                  size="md" 
+                  variant="light"
+                />
               )}
               <Button
                 variant="ghost"
@@ -421,14 +425,13 @@ export function Navbar({ children }: NavbarProps) {
             </SheetHeader>
             <div className="flex flex-col h-full bg-white">
               <div className="flex items-center justify-between h-16 px-6 bg-gradient-to-r from-blue-600 to-blue-700">
-                <div className="flex items-center space-x-3">
-                  <div className="p-1.5 bg-white/20 rounded-lg">
-                    <Home className="h-6 w-6 text-white" />
-                  </div>
-                  <span className="text-lg font-bold text-white">
-                    RealEstate OutReach
-                  </span>
-                </div>
+                <Logo 
+                  size="md" 
+                  variant="light" 
+                  showText={true}
+                  clickable={true}
+                  href="/"
+                />
                 <Button
                   onClick={() => setMobileMenuOpen(false)}
                   variant="ghost"
@@ -736,14 +739,13 @@ export function Navbar({ children }: NavbarProps) {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between h-16">
               <div className="flex items-center">
-                <Link href="/" className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-600 rounded-lg">
-                    <Home className="h-6 w-6 text-white" />
-                  </div>
-                  <span className="text-xl font-bold text-gray-900">
-                    RealEstate OutReach
-                  </span>
-                </Link>
+                <Logo 
+                  size="lg" 
+                  variant="colored" 
+                  showText={true}
+                  clickable={true}
+                  href="/"
+                />
               </div>
               <div className="flex items-center space-x-4">
                 <Link href="/login">

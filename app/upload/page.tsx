@@ -35,6 +35,7 @@ import {
   Clock,
   Zap,
 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import type { ExtractedProperty } from "@/lib/types";
 
 export default function UploadPage() {
@@ -364,9 +365,17 @@ export default function UploadPage() {
         <Card>
           <CardContent className="pt-6">
             {statsLoading ? (
-              <div className="flex items-center space-x-2 text-gray-600">
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span className="text-sm">Loading request statistics...</span>
+              <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                <Logo 
+                  size="sm" 
+                  variant="colored" 
+                  showText={false}
+                  clickable={false}
+                />
+                <div className="flex items-center space-x-2 text-gray-600">
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading request statistics...</span>
+                </div>
               </div>
             ) : statsError ? (
               <Alert variant="destructive">

@@ -48,6 +48,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useInviteController } from "@/hooks/use-invite-controller";
+import { Logo } from "@/components/logo";
 
 // Add sorting types
 type SortField = "created_at" | "user_last_sign_in_at";
@@ -161,7 +162,13 @@ export default function InviteUserPage() {
   if (isAuthorized === null) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center space-y-4">
+        <div className="flex flex-col items-center space-y-6">
+          <Logo 
+            size="lg" 
+            variant="colored" 
+            showText={true}
+            clickable={false}
+          />
           <div className="relative">
             <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-200"></div>
             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-blue-600 absolute top-0"></div>
@@ -344,7 +351,13 @@ export default function InviteUserPage() {
                 </CardHeader>
                 <CardContent className="px-4 md:px-6">
                   {isLoading ? (
-                    <div className="flex items-center justify-center py-8">
+                    <div className="flex flex-col items-center justify-center py-8 space-y-4">
+                      <Logo 
+                        size="sm" 
+                        variant="colored" 
+                        showText={false}
+                        clickable={false}
+                      />
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
                   ) : error ? (

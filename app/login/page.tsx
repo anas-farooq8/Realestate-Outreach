@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Eye, EyeOff } from "lucide-react";
 import { useLoginController } from "@/hooks/use-login-controller";
+import { Logo } from "@/components/logo";
 
 export default function LoginPage() {
   const {
@@ -30,6 +31,12 @@ export default function LoginPage() {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center z-50">
         <div className="flex flex-col items-center space-y-6">
+          <Logo 
+            size="lg" 
+            variant="colored" 
+            showText={true}
+            clickable={false}
+          />
           <div className="relative">
             <div className="animate-spin rounded-full h-12 w-12 border-2 border-blue-200"></div>
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-blue-600 absolute top-0"></div>
@@ -42,13 +49,15 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-100 flex items-center justify-center py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-4">
+      <div className="max-w-md w-full space-y-6">
         {/* Header Section */}
-        <div className="text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-2">
-            {pageContent.title}
-          </h2>
-          <p className="text-gray-600">{pageContent.subtitle} </p>
+        <div className="text-center space-y-4">
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              {pageContent.title}
+            </h2>
+            <p className="text-gray-600">{pageContent.subtitle} </p>
+          </div>
         </div>
 
         {/* Login Card */}

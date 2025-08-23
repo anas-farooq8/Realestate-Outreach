@@ -45,6 +45,7 @@ import {
   FileText,
 } from "lucide-react";
 import { exportToExcel } from "@/lib/excel-export";
+import { Logo } from "@/components/logo";
 import {
   useCachedProperties,
   useCachedEmailLogs,
@@ -1344,8 +1345,14 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pt-0">
             {loading ? (
-              <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                <RefreshCw className="h-8 w-8 animate-spin" />
+              <div className="flex flex-col items-center justify-center py-8 space-y-6">
+                <Logo 
+                  size="md" 
+                  variant="colored" 
+                  showText={false}
+                  clickable={false}
+                />
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
                 <p className="text-gray-500 text-sm">
                   Loading {currentView}...
                 </p>

@@ -37,6 +37,7 @@ import {
   MoreVertical,
   Eye,
 } from "lucide-react";
+import { Logo } from "@/components/logo";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -503,7 +504,7 @@ export default function ProposalsPage() {
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancel</AlertDialogCancel>
                         <AlertDialogAction
                           onClick={(e) => {
                             e.stopPropagation();
@@ -726,8 +727,14 @@ export default function ProposalsPage() {
                 </Button>
               </div>
             ) : pdfProposalsLoading ? (
-              <div className="flex flex-col items-center justify-center py-8 space-y-4">
-                <RefreshCw className="h-8 w-8 animate-spin" />
+              <div className="flex flex-col items-center justify-center py-8 space-y-6">
+                <Logo 
+                  size="md" 
+                  variant="colored" 
+                  showText={false}
+                  clickable={false}
+                />
+                <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
                 <p className="text-gray-500">Loading PDF files...</p>
               </div>
             ) : paginatedItems.length === 0 ? (
@@ -875,7 +882,7 @@ export default function ProposalsPage() {
                                           </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
-                                          <AlertDialogCancel>
+                                          <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
                                             Cancel
                                           </AlertDialogCancel>
                                           <AlertDialogAction
