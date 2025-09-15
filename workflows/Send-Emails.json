@@ -54,8 +54,8 @@
               "fieldValue": "={{ $('Get Email Template').first().json.id }}"
             },
             {
-              "fieldId": "campaign_week",
-              "fieldValue": "={{ $('Get Email Template').first().json.current_week }}"
+              "fieldId": "campaign_day",
+              "fieldValue": "={{ $('Get Email Template').first().json.current_day }}"
             },
             {
               "fieldId": "email_id",
@@ -220,7 +220,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://wiwxjzggfwkiqekkjtev.supabase.co/rest/v1/rpc/increment_campaign_week",
+        "url": "https://wiwxjzggfwkiqekkjtev.supabase.co/rest/v1/rpc/increment_campaign_day",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "supabaseApi",
         "options": {}
