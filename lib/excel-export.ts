@@ -25,7 +25,7 @@ export async function exportToExcel(
       { header: "Decision Maker", key: "decisionMaker", width: 25 },
       { header: "Email", key: "email", width: 25 },
       { header: "Template Name", key: "templateName", width: 20 },
-      { header: "Campaign Week", key: "campaignWeek", width: 15 },
+      { header: "Campaign Day", key: "campaignDay", width: 15 },
       { header: "Sent At", key: "sentAt", width: 20 },
       { header: "Replied At", key: "repliedAt", width: 20 },
       { header: "Reply Status", key: "replied", width: 15 },
@@ -38,7 +38,7 @@ export async function exportToExcel(
         decisionMaker: log.properties?.decision_maker_name || "",
         email: log.properties?.decision_maker_email || "",
         templateName: log.email_templates?.template_name || "",
-        campaignWeek: log.campaign_week || "",
+        campaignDay: log.campaign_day || "",
         sentAt: new Date(log.sent_at).toLocaleString(),
         repliedAt: log.replied_at
           ? new Date(log.replied_at).toLocaleString()

@@ -37,7 +37,7 @@ export interface EmailLog {
   id: string; // UUID - NOT NULL DEFAULT gen_random_uuid()
   property_id: string; // UUID - NOT NULL
   template_id: number; // integer - NOT NULL
-  campaign_week: number; // integer - NOT NULL DEFAULT 1
+  campaign_day: number; // integer - NOT NULL DEFAULT 1
   replied: boolean; // boolean - NOT NULL DEFAULT false
   email_id: string; // text - NOT NULL
   thread_id: string; // text - NOT NULL UNIQUE
@@ -50,7 +50,7 @@ export interface EmailLog {
 
 export interface CampaignProgress {
   id: number; // integer - NOT NULL DEFAULT nextval('campaign_progress_id_seq'::regclass)
-  current_week: number; // integer - NOT NULL DEFAULT 1
+  current_day: number; // integer - NOT NULL DEFAULT 1
   last_sent_at: string; // timestamp with time zone - NOT NULL DEFAULT timezone('UTC'::text, now())
   pdf_url: string; // text - NOT NULL DEFAULT 'https://...'
 }

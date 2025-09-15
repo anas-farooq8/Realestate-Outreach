@@ -436,7 +436,7 @@ class DataCache {
           const { data: emailLogsData, error: emailLogsError } =
             await this.supabase
               .from("email_logs")
-              .select("id, campaign_week, replied, sent_at, replied_at");
+              .select("id, campaign_day, replied, sent_at, replied_at");
 
           if (!emailLogsError && emailLogsData) {
             emailLogs = emailLogsData as EmailLog[];
@@ -476,7 +476,7 @@ class DataCache {
         const totalReplies = emailLogs.filter((log) => log.replied).length;
         const replyRate =
           totalEmailsSent > 0 ? (totalReplies / totalEmailsSent) * 100 : 0;
-        const currentWeek = campaignProgress?.current_week || 1;
+        const currentWeek = campaignProgress?.current_day || 1;
         const activeTemplates = emailTemplates.filter(
           (t) => t.is_active
         ).length;

@@ -100,7 +100,7 @@ export default function DashboardPage() {
     city: "all",
     zipCode: "all",
     subscriptionStatus: "all",
-    campaignWeek: "all",
+    campaignDay: "all",
     replyStatus: "all",
     template: "all",
     emailExists: "all", // New filter for email exists
@@ -256,9 +256,9 @@ export default function DashboardPage() {
     }
 
     // Apply email-specific filters
-    if (filters.campaignWeek !== "all") {
+    if (filters.campaignDay !== "all") {
       filteredLogs = filteredLogs.filter(
-        (log) => log.campaign_week === parseInt(filters.campaignWeek)
+        (log) => log.campaign_day === parseInt(filters.campaignDay)
       );
     }
 
@@ -355,7 +355,7 @@ export default function DashboardPage() {
       city: "all",
       zipCode: "all",
       subscriptionStatus: "all",
-      campaignWeek: "all",
+      campaignDay: "all",
       replyStatus: "all",
       template: "all",
       emailExists: "all", // Reset to default
@@ -451,22 +451,22 @@ export default function DashboardPage() {
         .filter((zip): zip is string => Boolean(zip))
     ),
   ].sort();
-  const uniqueWeeks = [
-    ...new Set(emailLogs.map((log) => log.campaign_week)),
+  const uniqueDays = [
+    ...new Set(emailLogs.map((log) => log.campaign_day)),
   ].sort((a, b) => a - b);
 
-  // Get current template for current week using the rotation formula
-  const getCurrentWeekTemplate = () => {
+  // Get current template for current day using the rotation formula
+  const getCurrentDayTemplate = () => {
     if (!campaignProgress || !emailTemplates.length) return null;
 
     const activeTemplates = emailTemplates.filter((t) => t.is_active);
     if (activeTemplates.length === 0) return null;
 
-    // Calculate which template to use based on current week
-    // Formula: ((current_week - 1) % total_templates + 1)
-    const currentWeek = campaignProgress.current_week;
+    // Calculate which template to use based on current day
+    // Formula: ((current_day - 1) % total_templates + 1)
+    const currentDay = campaignProgress.current_day;
     const totalTemplates = activeTemplates.length;
-    const templateIndex = (currentWeek - 1) % totalTemplates;
+    const templateIndex = (currentDay - 1) % totalTemplates;
 
     // Sort templates by ID to ensure consistent ordering
     const sortedTemplates = activeTemplates.sort((a, b) => a.id - b.id);
@@ -474,7 +474,7 @@ export default function DashboardPage() {
     return sortedTemplates[templateIndex] || null;
   };
 
-  const currentTemplate = getCurrentWeekTemplate();
+  const currentTemplate = getCurrentDayTemplate();
 
   useEffect(() => {
     applyFilters();
@@ -583,10 +583,10 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <p className="text-xs md:text-sm font-medium text-gray-500">
-                    Current Week
+                    Current Day
                   </p>
                   <p className="text-lg md:text-2xl font-bold">
-                    Week {campaignProgress?.current_week || 1}
+                    Day {campaignProgress?.current_day || 1}
                   </p>
                 </div>
               </div>
@@ -930,11 +930,11 @@ export default function DashboardPage() {
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label className="text-xs">Week:</Label>
+                        <Label className="text-xs">Day:</Label>
                         <Select
-                          value={filters.campaignWeek}
+                          value={filters.campaignDay}
                           onValueChange={(value) =>
-                            setFilters({ ...filters, campaignWeek: value })
+                            setFilters({ ...filters, campaignDay: value })
                           }
                         >
                           <SelectTrigger className="h-8 text-xs">
@@ -942,9 +942,9 @@ export default function DashboardPage() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">All</SelectItem>
-                            {uniqueWeeks.map((week) => (
-                              <SelectItem key={week} value={week.toString()}>
-                                {week}
+                            {uniqueDays.map((day) => (
+                              <SelectItem key={day} value={day.toString()}>
+                                {day}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1146,11 +1146,11 @@ export default function DashboardPage() {
                   <>
                     <div className="h-6 border-l border-gray-300"></div>
                     <div className="flex items-center space-x-2">
-                      <Label className="text-sm whitespace-nowrap">Week:</Label>
+                      <Label className="text-sm whitespace-nowrap">Day:</Label>
                       <Select
-                        value={filters.campaignWeek}
+                        value={filters.campaignDay}
                         onValueChange={(value) =>
-                          setFilters({ ...filters, campaignWeek: value })
+                          setFilters({ ...filters, campaignDay: value })
                         }
                       >
                         <SelectTrigger className="w-24">
@@ -1158,9 +1158,9 @@ export default function DashboardPage() {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="all">All</SelectItem>
-                          {uniqueWeeks.map((week) => (
-                            <SelectItem key={week} value={week.toString()}>
-                              {week}
+                          {uniqueDays.map((day) => (
+                            <SelectItem key={day} value={day.toString()}>
+                              {day}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -1476,10 +1476,10 @@ export default function DashboardPage() {
                               </div>
                               <div>
                                 <span className="font-medium">
-                                  Campaign Week:
+                                  Campaign Day:
                                 </span>
                                 <Badge variant="outline" className="text-xs">
-                                  Week {log.campaign_week}
+                                  Day {log.campaign_day}
                                 </Badge>
                               </div>
                               <div>
@@ -1643,7 +1643,7 @@ export default function DashboardPage() {
                             Template Name
                           </TableHead>
                           <TableHead className="min-w-[120px]">
-                            Campaign Week
+                            Campaign Day
                           </TableHead>
                           <TableHead className="min-w-[120px]">
                             Sent At
@@ -1688,7 +1688,7 @@ export default function DashboardPage() {
                             </TableCell>
                             <TableCell className="min-w-[120px]">
                               <Badge variant="outline">
-                                Week {log.campaign_week}
+                                Day {log.campaign_day}
                               </Badge>
                             </TableCell>
                             <TableCell className="min-w-[120px]">
