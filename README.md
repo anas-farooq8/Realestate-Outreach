@@ -126,3 +126,10 @@ Then open `http://localhost:3000` in your browser.
 These workflows can be imported into n8n via JSON exports from the `/n8n` folder.
 
 ---
+
+### Demo
+<img width="1920" height="1200" alt="Image" src="https://github.com/user-attachments/assets/1c277eb7-e398-43bd-82ae-29b310091482" />
+<img width="1920" height="1200" alt="Image" src="https://github.com/user-attachments/assets/ba7b40ca-f5c1-41b2-b33b-83a8dda3e362" />
+<img width="1920" height="1200" alt="Image" src="https://github.com/user-attachments/assets/83760f32-e25d-4312-8e2e-f7ae4b49a1ae" />
+<img width="1920" height="1200" alt="Image" src="https://github.com/user-attachments/assets/50972b35-48ec-404e-bc87-186cf9b27adb" />
+<img width="1920" height="1200" alt="Image" src="https://github.com/user-attachments/assets/edac3119-185f-44c8-ad5d-b2af3eccd1e8" />
