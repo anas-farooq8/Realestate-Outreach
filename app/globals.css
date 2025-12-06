@@ -102,6 +102,29 @@
   .scroll-smooth {
     scroll-behavior: smooth;
   }
+
+  /* Calendar cell-size utilities */
+  .size-cell {
+    width: var(--cell-size);
+    height: var(--cell-size);
+  }
+
+  .h-cell {
+    height: var(--cell-size);
+  }
+
+  .w-cell {
+    width: var(--cell-size);
+  }
+
+  .min-w-cell {
+    min-width: var(--cell-size);
+  }
+
+  .px-cell {
+    padding-left: var(--cell-size);
+    padding-right: var(--cell-size);
+  }
 }
 
 /* Mobile-specific improvements */

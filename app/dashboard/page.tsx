@@ -44,7 +44,6 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
-import { exportToExcel } from "@/lib/excel-export";
 import { Logo } from "@/components/logo";
 import {
   useCachedProperties,
@@ -383,7 +382,28 @@ export default function DashboardPage() {
       const filename = `${currentView}_${
         new Date().toISOString().split("T")[0]
       }.xlsx`;
-      await exportToExcel(dataToExport, filename);
+
+      // Call API to generate Excel file
+      const response = await fetch("/api/export-excel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ data: dataToExport, filename }),
+      });
+
+      if (!response.ok) throw new Error("Export failed");
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       toast({
         title: "Export Successful",

@@ -1,10 +1,13 @@
-import * as ExcelJS from "exceljs";
 import type { Property, EmailLog } from "./types";
 
 export async function exportToExcel(
   data: Property[] | EmailLog[],
   filename: string
 ) {
+  // Dynamically import exceljs to avoid bundling issues
+  // exceljs is a CommonJS module, so we need to handle the default export
+  const ExcelJSModule = await import("exceljs");
+  const ExcelJS = (ExcelJSModule as any).default || ExcelJSModule;
   // Create workbook and worksheet
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet(
@@ -92,25 +95,7 @@ export async function exportToExcel(
     fgColor: { argb: "FFE0E0E0" },
   };
 
-  // Generate buffer and download file (browser-compatible)
+  // Generate buffer and return it
   const buffer = await workbook.xlsx.writeBuffer();
-
-  // Create blob and download link
-  const blob = new Blob([buffer], {
-    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  });
-
-  // Create download link
-  const url = window.URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-
-  // Trigger download
-  document.body.appendChild(link);
-  link.click();
-
-  // Cleanup
-  document.body.removeChild(link);
-  window.URL.revokeObjectURL(url);
+  return buffer;
 }
